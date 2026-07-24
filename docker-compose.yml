@@ -1,0 +1,19 @@
+services:
+  network-dashboard:
+    build:
+      context: .
+    image: local/network-dashboard:1.0
+    container_name: network-dashboard
+    restart: unless-stopped
+    network_mode: host
+    environment:
+      NETWORK_SUBNET: "192.168.1.0/24"
+      APP_PORT: "8766"
+      IPERF_PORT: "5201"
+      DATA_DIR: "/data"
+      TZ: "Europe/London"
+    volumes:
+      - ./data:/data
+    cap_add:
+      - NET_RAW
+      - NET_ADMIN
