@@ -13,6 +13,13 @@ from pathlib import Path
 
 from flask import Flask, jsonify, render_template, request
 
+try:
+    from version import APP_NAME, APP_STAGE, APP_VERSION
+except ImportError:
+    APP_NAME = "Network Dashboard"
+    APP_VERSION = "0.3.0"
+    APP_STAGE = "Device Intelligence"
+
 APP_PORT = int(os.getenv("APP_PORT", "8766"))
 NETWORK_SUBNET = os.getenv("NETWORK_SUBNET", "192.168.1.0/24")
 IPERF_PORT = int(os.getenv("IPERF_PORT", "5201"))
@@ -27,14 +34,17 @@ app = Flask(__name__)
 scan_lock = threading.Lock()
 scan_state = {"running": False, "last_error": None}
 
+
 def utc_now():
     return datetime.now(timezone.utc).isoformat(timespec="seconds")
+
 
 def db():
     DATA_DIR.mkdir(parents=True, exist_ok=True)
     conn = sqlite3.connect(DB_PATH)
     conn.row_factory = sqlite3.Row
     return conn
+
 
 def init_db():
     with db() as conn:
@@ -73,7 +83,8 @@ def init_db():
             "cpu_percent": "REAL",
             "memory_percent": "REAL",
             "uptime_seconds": "INTEGER",
-            "agent_last_seen": "TEXT"
+            "agent_last_seen": "TEXT",
+            "agent_payload": "TEXT"
         }
 
         for column, definition in migrations.items():
@@ -82,6 +93,7 @@ def init_db():
                     f"ALTER TABLE devices ADD COLUMN {column} {definition}"
                 )
 
+
 def valid_target(value):
     try:
         ip = ipaddress.ip_address(value)
@@ -89,6 +101,7 @@ def valid_target(value):
         return ip in subnet
     except ValueError:
         return False
+
 
 def run_command(args, timeout=COMMAND_TIMEOUT):
     try:
@@ -114,12 +127,14 @@ def run_command(args, timeout=COMMAND_TIMEOUT):
             "stderr": f"Command timed out after {timeout} seconds.",
         }
 
+
 def tcp_open(ip, port, timeout=0.5):
     try:
         with socket.create_connection((ip, port), timeout=timeout):
             return True
     except OSError:
         return False
+
 
 def fetch_agent_status(ip):
     url = f"http://{ip}:{AGENT_PORT}/status"
@@ -136,11 +151,7 @@ def fetch_agent_status(ip):
                 return None
 
             payload = json.loads(response.read().decode("utf-8"))
-
-            if not isinstance(payload, dict):
-                return None
-
-            return payload
+            return payload if isinstance(payload, dict) else None
     except (
         urllib.error.URLError,
         TimeoutError,
@@ -156,56 +167,99 @@ def reverse_dns(ip):
     except (socket.herror, socket.gaierror, OSError):
         return ""
 
+
 def parse_nmap_discovery(output):
     devices = []
     current = None
+
     for line in output.splitlines():
         line = line.strip()
+
         if line.startswith("Nmap scan report for "):
             value = line.replace("Nmap scan report for ", "", 1)
             hostname = ""
             ip = value
             match = re.match(r"(.+?) \(([\d.]+)\)$", value)
+
             if match:
                 hostname, ip = match.group(1), match.group(2)
-            current = {"ip": ip, "hostname": hostname, "mac": "", "vendor": ""}
+
+            current = {
+                "ip": ip,
+                "hostname": hostname,
+                "mac": "",
+                "vendor": "",
+            }
             devices.append(current)
+
         elif current and line.startswith("MAC Address:"):
-            match = re.match(r"MAC Address:\s+([0-9A-F:]+)\s*(?:\((.*?)\))?$", line, re.I)
+            match = re.match(
+                r"MAC Address:\s+([0-9A-F:]+)\s*(?:\((.*?)\))?$",
+                line,
+                re.I,
+            )
             if match:
                 current["mac"] = match.group(1).upper()
                 current["vendor"] = match.group(2) or ""
+
     return devices
+
+
+def normalise_windows_name(agent_payload):
+    if not agent_payload:
+        return agent_payload
+
+    operating_system = agent_payload.get("operating_system", {})
+    product_name = str(operating_system.get("product_name", ""))
+    build_text = str(operating_system.get("build", ""))
+    build_number = 0
+
+    try:
+        build_number = int(build_text.split(".", 1)[0])
+    except (TypeError, ValueError):
+        pass
+
+    if build_number >= 22000 and product_name.startswith("Windows 10"):
+        operating_system["product_name"] = product_name.replace(
+            "Windows 10",
+            "Windows 11",
+            1,
+        )
+
+    return agent_payload
+
 
 def scan_network():
     if not scan_lock.acquire(blocking=False):
         return
+
     scan_state["running"] = True
     scan_state["last_error"] = None
+
     try:
         result = run_command(
             ["nmap", "-sn", "-n", NETWORK_SUBNET],
             timeout=SCAN_TIMEOUT,
         )
+
         if not result["ok"] and not result["stdout"]:
             raise RuntimeError(result["stderr"] or "Network scan failed.")
 
         found = parse_nmap_discovery(result["stdout"])
         now = utc_now()
-        found_ips = set()
 
         with db() as conn:
             conn.execute("UPDATE devices SET is_online = 0")
+
             for device in found:
                 ip = device["ip"]
+
                 if not valid_target(ip):
                     continue
-                found_ips.add(ip)
-                discovered_hostname = (
-                    device["hostname"] or reverse_dns(ip)
-                )
 
-                agent = fetch_agent_status(ip)
+                discovered_hostname = device["hostname"] or reverse_dns(ip)
+                agent = normalise_windows_name(fetch_agent_status(ip))
+
                 agent_available = int(agent is not None)
                 agent_hostname = ""
                 agent_version = ""
@@ -213,6 +267,7 @@ def scan_network():
                 memory_percent = None
                 uptime_seconds = None
                 agent_last_seen = None
+                agent_payload = None
 
                 if agent:
                     agent_hostname = str(
@@ -221,15 +276,12 @@ def scan_network():
                     agent_version = str(
                         agent.get("agent", {}).get("version", "")
                     ).strip()
-
                     performance = agent.get("performance", {})
                     cpu_percent = performance.get("cpu_percent")
                     memory_percent = performance.get("memory_percent")
-                    uptime_seconds = agent.get(
-                        "device", {}
-                    ).get("uptime_seconds")
+                    uptime_seconds = agent.get("device", {}).get("uptime_seconds")
                     agent_last_seen = now
-
+                    agent_payload = json.dumps(agent, separators=(",", ":"))
                     iperf_available = int(
                         bool(
                             agent.get("services", {})
@@ -238,16 +290,9 @@ def scan_network():
                         )
                     )
                 else:
-                    # Legacy fallback for machines without the agent.
-                    iperf_available = int(
-                        tcp_open(ip, IPERF_PORT)
-                    )
+                    iperf_available = int(tcp_open(ip, IPERF_PORT))
 
-                hostname = (
-                    agent_hostname
-                    or discovered_hostname
-                    or ip
-                )
+                hostname = agent_hostname or discovered_hostname or ip
 
                 existing = conn.execute(
                     "SELECT first_seen FROM devices WHERE ip = ?",
@@ -257,36 +302,24 @@ def scan_network():
 
                 conn.execute("""
                     INSERT INTO devices (
-                        ip,
-                        hostname,
-                        mac,
-                        vendor,
-                        is_online,
-                        iperf_available,
-                        first_seen,
-                        last_seen,
-                        agent_available,
-                        agent_version,
-                        agent_hostname,
-                        cpu_percent,
-                        memory_percent,
-                        uptime_seconds,
-                        agent_last_seen
+                        ip, hostname, mac, vendor, is_online,
+                        iperf_available, first_seen, last_seen,
+                        agent_available, agent_version, agent_hostname,
+                        cpu_percent, memory_percent, uptime_seconds,
+                        agent_last_seen, agent_payload
                     )
                     VALUES (
                         ?, ?, ?, ?, 1, ?, ?, ?,
-                        ?, ?, ?, ?, ?, ?, ?
+                        ?, ?, ?, ?, ?, ?, ?, ?
                     )
                     ON CONFLICT(ip) DO UPDATE SET
                         hostname = excluded.hostname,
                         mac = CASE
-                            WHEN excluded.mac <> ''
-                            THEN excluded.mac
+                            WHEN excluded.mac <> '' THEN excluded.mac
                             ELSE devices.mac
                         END,
                         vendor = CASE
-                            WHEN excluded.vendor <> ''
-                            THEN excluded.vendor
+                            WHEN excluded.vendor <> '' THEN excluded.vendor
                             ELSE devices.vendor
                         END,
                         is_online = 1,
@@ -322,6 +355,11 @@ def scan_network():
                             WHEN excluded.agent_available = 1
                             THEN excluded.agent_last_seen
                             ELSE devices.agent_last_seen
+                        END,
+                        agent_payload = CASE
+                            WHEN excluded.agent_available = 1
+                            THEN excluded.agent_payload
+                            ELSE devices.agent_payload
                         END
                 """, (
                     ip,
@@ -338,24 +376,32 @@ def scan_network():
                     memory_percent,
                     uptime_seconds,
                     agent_last_seen,
+                    agent_payload,
                 ))
+
     except Exception as exc:
         scan_state["last_error"] = str(exc)
+
     finally:
         scan_state["running"] = False
         scan_lock.release()
+
 
 def parse_iperf_json(raw):
     try:
         payload = json.loads(raw)
         end = payload.get("end", {})
         summary = end.get("sum_received") or end.get("sum_sent") or {}
+
         return (
             float(summary.get("bits_per_second", 0)),
-            int(summary.get("retransmits", 0)) if summary.get("retransmits") is not None else None,
+            int(summary.get("retransmits", 0))
+            if summary.get("retransmits") is not None
+            else None,
         )
     except Exception:
         return (None, None)
+
 
 @app.get("/")
 def index():
@@ -363,80 +409,171 @@ def index():
         "index.html",
         subnet=NETWORK_SUBNET,
         iperf_port=IPERF_PORT,
+        app_name=APP_NAME,
+        app_version=APP_VERSION,
+        app_stage=APP_STAGE,
     )
+
 
 @app.get("/api/devices")
 def devices():
     with db() as conn:
         rows = conn.execute("""
             SELECT
-                ip,
-                hostname,
-                mac,
-                vendor,
-                is_online,
-                iperf_available,
-                first_seen,
-                last_seen,
-                agent_available,
-                agent_version,
-                agent_hostname,
-                cpu_percent,
-                memory_percent,
-                uptime_seconds,
+                ip, hostname, mac, vendor, is_online,
+                iperf_available, first_seen, last_seen,
+                agent_available, agent_version, agent_hostname,
+                cpu_percent, memory_percent, uptime_seconds,
                 agent_last_seen
             FROM devices
-            ORDER BY is_online DESC,
-                     CAST(substr(ip, instr(ip, '.') + 1) AS INTEGER),
-                     ip
+            ORDER BY is_online DESC, ip
         """).fetchall()
+
     return jsonify({
         "devices": [dict(row) for row in rows],
         "scan": scan_state,
         "subnet": NETWORK_SUBNET,
     })
 
+
+@app.get("/api/device/<target>")
+def device_details(target):
+    if not valid_target(target):
+        return jsonify({"ok": False, "error": "Invalid target."}), 400
+
+    refresh = request.args.get("refresh", "0") == "1"
+    fresh_agent = normalise_windows_name(fetch_agent_status(target)) if refresh else None
+
+    with db() as conn:
+        row = conn.execute(
+            "SELECT * FROM devices WHERE ip = ?",
+            (target,),
+        ).fetchone()
+
+        if not row:
+            return jsonify({"ok": False, "error": "Device not found."}), 404
+
+        if fresh_agent:
+            performance = fresh_agent.get("performance", {})
+            device_info = fresh_agent.get("device", {})
+            agent_info = fresh_agent.get("agent", {})
+            services = fresh_agent.get("services", {})
+
+            conn.execute("""
+                UPDATE devices
+                SET agent_available = 1,
+                    agent_version = ?,
+                    agent_hostname = ?,
+                    cpu_percent = ?,
+                    memory_percent = ?,
+                    uptime_seconds = ?,
+                    agent_last_seen = ?,
+                    agent_payload = ?,
+                    iperf_available = ?
+                WHERE ip = ?
+            """, (
+                str(agent_info.get("version", "")).strip(),
+                str(device_info.get("hostname", "")).strip(),
+                performance.get("cpu_percent"),
+                performance.get("memory_percent"),
+                device_info.get("uptime_seconds"),
+                utc_now(),
+                json.dumps(fresh_agent, separators=(",", ":")),
+                int(bool(services.get("iperf3", {}).get("running", False))),
+                target,
+            ))
+
+            row = conn.execute(
+                "SELECT * FROM devices WHERE ip = ?",
+                (target,),
+            ).fetchone()
+
+        agent_payload = None
+        if row["agent_payload"]:
+            try:
+                agent_payload = normalise_windows_name(
+                    json.loads(row["agent_payload"])
+                )
+            except json.JSONDecodeError:
+                agent_payload = None
+
+    return jsonify({
+        "ok": True,
+        "device": {
+            key: row[key]
+            for key in row.keys()
+            if key != "agent_payload"
+        },
+        "agent": agent_payload,
+    })
+
+
 @app.post("/api/scan")
 def trigger_scan():
     if scan_state["running"]:
         return jsonify({"ok": True, "message": "A scan is already running."})
+
     threading.Thread(target=scan_network, daemon=True).start()
     return jsonify({"ok": True, "message": "Network scan started."})
 
+
 @app.post("/api/ping")
 def ping():
-    target = request.json.get("target", "")
+    target = (request.json or {}).get("target", "")
+
     if not valid_target(target):
-        return jsonify({"ok": False, "error": "Target is outside the configured subnet."}), 400
-    result = run_command(["ping", "-c", "4", "-W", "2", target], timeout=12)
-    return jsonify(result)
+        return jsonify({
+            "ok": False,
+            "error": "Target is outside the configured subnet.",
+        }), 400
+
+    return jsonify(run_command(
+        ["ping", "-c", "4", "-W", "2", target],
+        timeout=12,
+    ))
+
 
 @app.post("/api/ports")
 def ports():
-    target = request.json.get("target", "")
+    target = (request.json or {}).get("target", "")
+
     if not valid_target(target):
-        return jsonify({"ok": False, "error": "Target is outside the configured subnet."}), 400
-    result = run_command(
+        return jsonify({
+            "ok": False,
+            "error": "Target is outside the configured subnet.",
+        }), 400
+
+    return jsonify(run_command(
         ["nmap", "-Pn", "-T4", "--top-ports", "100", target],
         timeout=45,
-    )
-    return jsonify(result)
+    ))
+
 
 @app.post("/api/iperf")
 def iperf():
     body = request.json or {}
     target = body.get("target", "")
     reverse = bool(body.get("reverse", False))
+
     if not valid_target(target):
-        return jsonify({"ok": False, "error": "Target is outside the configured subnet."}), 400
+        return jsonify({
+            "ok": False,
+            "error": "Target is outside the configured subnet.",
+        }), 400
+
     if not tcp_open(target, IPERF_PORT, timeout=1):
         return jsonify({
             "ok": False,
-            "error": f"No iperf3 server detected on {target}:{IPERF_PORT}."
+            "error": f"No iperf3 server detected on {target}:{IPERF_PORT}.",
         }), 400
 
-    args = ["iperf3", "-c", target, "-p", str(IPERF_PORT), "-J", "-t", "10"]
+    args = [
+        "iperf3", "-c", target,
+        "-p", str(IPERF_PORT),
+        "-J", "-t", "10",
+    ]
     direction = "reverse" if reverse else "forward"
+
     if reverse:
         args.append("-R")
 
@@ -447,11 +584,16 @@ def iperf():
     with db() as conn:
         conn.execute("""
             INSERT INTO iperf_results
-                (target_ip, direction, bits_per_second, retransmits, raw_output, created_at)
+                (target_ip, direction, bits_per_second,
+                 retransmits, raw_output, created_at)
             VALUES (?, ?, ?, ?, ?, ?)
         """, (
-            target, direction, bits_per_second, retransmits,
-            raw_output, utc_now()
+            target,
+            direction,
+            bits_per_second,
+            retransmits,
+            raw_output,
+            utc_now(),
         ))
 
     result["bits_per_second"] = bits_per_second
@@ -459,9 +601,11 @@ def iperf():
     result["direction"] = direction
     return jsonify(result)
 
+
 @app.get("/api/results")
 def results():
     target = request.args.get("target", "")
+
     with db() as conn:
         if target and valid_target(target):
             rows = conn.execute("""
@@ -478,7 +622,9 @@ def results():
                 FROM iperf_results
                 ORDER BY id DESC LIMIT 20
             """).fetchall()
+
     return jsonify({"results": [dict(row) for row in rows]})
+
 
 if __name__ == "__main__":
     init_db()
