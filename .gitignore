@@ -7,3 +7,16 @@ __pycache__/
 *.log
 
 .env
+
+# Local upgrade backups
+.backup-v*/
+
+# Python
+__pycache__/
+*.py[cod]
+
+# Runtime data and logs
+*.log
+*.db
+*.db-shm
+*.db-wal
