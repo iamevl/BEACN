@@ -7,5 +7,5 @@
   "restart_delay_seconds": 3,
   "hardware_helper_path": "C:\\Program Files\\NetworkDashboardAgent\\hardware-helper.exe",
   "hardware_helper_timeout_seconds": 8,
-  "hardware_cache_seconds": 2
+  "hardware_cache_seconds": 30
 }

@@ -36,7 +36,7 @@ def load_config():
         "restart_delay_seconds": 3,
         "hardware_helper_path": str(BASE_DIR / "hardware-helper.exe"),
         "hardware_helper_timeout_seconds": 8,
-        "hardware_cache_seconds": 2,
+        "hardware_cache_seconds": 30,
     }
 
     if CONFIG_PATH.exists():
