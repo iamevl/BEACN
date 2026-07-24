@@ -139,7 +139,12 @@
     .disk-card, .adapter-card, .service-card, .chart-card { margin-bottom: 10px; }
     .info-box small { display: block; margin-bottom: 5px; }
     .progress-block { margin-bottom: 18px; }
-    .progress-label, .row-between { justify-content: space-between; }
+    .progress-label, .row-between {
+      display: flex;
+      justify-content: space-between;
+      gap: 12px;
+      align-items: center;
+    }
     .progress-track {
       height: 11px;
       background: #080d19;
