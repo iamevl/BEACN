@@ -34,12 +34,13 @@ def load_config():
         "iperf_port": 5201,
         "api_token": "",
         "restart_delay_seconds": 3,
+        "hardware_helper_path": str(BASE_DIR / "hardware-helper.exe"),
+        "hardware_helper_timeout_seconds": 8,
+        "hardware_cache_seconds": 30,
     }
 
     if CONFIG_PATH.exists():
-        config.update(
-            json.loads(CONFIG_PATH.read_text(encoding="utf-8"))
-        )
+        config.update(json.loads(CONFIG_PATH.read_text(encoding="utf-8")))
 
     return config
 
@@ -50,9 +51,7 @@ CONFIG = load_config()
 def log(message):
     try:
         with LOG_PATH.open("a", encoding="utf-8") as handle:
-            timestamp = datetime.now(timezone.utc).isoformat(
-                timespec="seconds"
-            )
+            timestamp = datetime.now(timezone.utc).isoformat(timespec="seconds")
             handle.write(f"{timestamp} {message}\n")
     except OSError:
         pass
@@ -64,14 +63,14 @@ class State:
         self.iperf = None
         self.lock = threading.Lock()
         self.stop = threading.Event()
-        self.version = "0.2.0"
+        self.version = "0.5.0"
+        self.hardware_lock = threading.Lock()
+        self.hardware_payload = None
+        self.hardware_updated_at = 0.0
 
     def iperf_running(self):
         with self.lock:
-            return (
-                self.iperf is not None
-                and self.iperf.poll() is None
-            )
+            return self.iperf is not None and self.iperf.poll() is None
 
 
 STATE = State()
@@ -90,28 +89,14 @@ def start_iperf():
 
         try:
             STATE.iperf = subprocess.Popen(
-                [
-                    str(path),
-                    "-s",
-                    "-p",
-                    str(CONFIG["iperf_port"]),
-                ],
+                [str(path), "-s", "-p", str(CONFIG["iperf_port"])],
                 cwd=str(path.parent),
                 stdout=subprocess.DEVNULL,
                 stderr=subprocess.DEVNULL,
-                creationflags=getattr(
-                    subprocess,
-                    "CREATE_NO_WINDOW",
-                    0,
-                ),
+                creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),
             )
-
-            log(
-                f"Started iperf3 on port "
-                f"{CONFIG['iperf_port']}"
-            )
+            log(f"Started iperf3 on port {CONFIG['iperf_port']}")
             return True
-
         except Exception as exc:
             log(f"Failed to start iperf3: {exc}")
             STATE.iperf = None
@@ -138,10 +123,7 @@ def supervise():
     while not STATE.stop.is_set():
         if not STATE.iperf_running():
             start_iperf()
-
-        STATE.stop.wait(
-            int(CONFIG["restart_delay_seconds"])
-        )
+        STATE.stop.wait(int(CONFIG["restart_delay_seconds"]))
 
 
 def read_registry_value(path, name):
@@ -149,10 +131,7 @@ def read_registry_value(path, name):
         return None
 
     try:
-        with winreg.OpenKey(
-            winreg.HKEY_LOCAL_MACHINE,
-            path,
-        ) as key:
+        with winreg.OpenKey(winreg.HKEY_LOCAL_MACHINE, path) as key:
             value, _ = winreg.QueryValueEx(key, name)
             return value
     except OSError:
@@ -160,37 +139,16 @@ def read_registry_value(path, name):
 
 
 def windows_information():
-    registry_path = (
-        r"SOFTWARE\Microsoft\Windows NT\CurrentVersion"
-    )
+    registry_path = r"SOFTWARE\Microsoft\Windows NT\CurrentVersion"
 
-    product_name = read_registry_value(
-        registry_path,
-        "ProductName",
-    )
-    display_version = read_registry_value(
-        registry_path,
-        "DisplayVersion",
-    )
-    release_id = read_registry_value(
-        registry_path,
-        "ReleaseId",
-    )
-    current_build = read_registry_value(
-        registry_path,
-        "CurrentBuildNumber",
-    )
-    ubr = read_registry_value(
-        registry_path,
-        "UBR",
-    )
-    edition_id = read_registry_value(
-        registry_path,
-        "EditionID",
-    )
+    product_name = read_registry_value(registry_path, "ProductName")
+    display_version = read_registry_value(registry_path, "DisplayVersion")
+    release_id = read_registry_value(registry_path, "ReleaseId")
+    current_build = read_registry_value(registry_path, "CurrentBuildNumber")
+    ubr = read_registry_value(registry_path, "UBR")
+    edition_id = read_registry_value(registry_path, "EditionID")
 
     build = str(current_build or "")
-
     if build and ubr is not None:
         build = f"{build}.{ubr}"
 
@@ -209,26 +167,16 @@ def processor_information():
         r"HARDWARE\DESCRIPTION\System\CentralProcessor\0",
         "ProcessorNameString",
     )
-
     physical_cores = psutil.cpu_count(logical=False)
     logical_cores = psutil.cpu_count(logical=True)
-
     frequency = psutil.cpu_freq()
 
     return {
-        "model": (
-            str(processor_name).strip()
-            if processor_name
-            else platform.processor()
-        ),
+        "model": str(processor_name).strip() if processor_name else platform.processor(),
         "physical_cores": physical_cores,
         "logical_cores": logical_cores,
-        "frequency_current_mhz": (
-            frequency.current if frequency else None
-        ),
-        "frequency_max_mhz": (
-            frequency.max if frequency else None
-        ),
+        "frequency_current_mhz": frequency.current if frequency else None,
+        "frequency_max_mhz": frequency.max if frequency else None,
     }
 
 
@@ -237,14 +185,9 @@ def disk_information():
     seen = set()
 
     for partition in psutil.disk_partitions(all=False):
-        identity = (
-            partition.device,
-            partition.mountpoint,
-        )
-
+        identity = (partition.device, partition.mountpoint)
         if identity in seen:
             continue
-
         seen.add(identity)
 
         try:
@@ -273,7 +216,6 @@ def network_information():
 
     for name, addresses in adapter_addresses.items():
         stats = adapter_stats.get(name)
-
         ip_addresses = []
         mac_address = ""
 
@@ -287,7 +229,6 @@ def network_information():
                     "netmask": address.netmask,
                     "broadcast": address.broadcast,
                 })
-
             elif address.family == socket.AF_INET6:
                 ip_addresses.append({
                     "family": "IPv6",
@@ -295,11 +236,7 @@ def network_information():
                     "netmask": address.netmask,
                     "broadcast": address.broadcast,
                 })
-
-            elif (
-                "AF_LINK" in family_name
-                or "AF_PACKET" in family_name
-            ):
+            elif "AF_LINK" in family_name or "AF_PACKET" in family_name:
                 mac_address = address.address
 
         adapters.append({
@@ -314,6 +251,69 @@ def network_information():
     return adapters
 
 
+def unavailable_hardware(reason):
+    return {
+        "provider": "LibreHardwareMonitor",
+        "available": False,
+        "error": reason,
+        "summary": {},
+        "hardware": [],
+        "timestamp": datetime.now(timezone.utc).isoformat(timespec="seconds"),
+    }
+
+
+def hardware_information(force=False):
+    cache_seconds = max(0.0, float(CONFIG.get("hardware_cache_seconds", 2)))
+    now = time.monotonic()
+
+    with STATE.hardware_lock:
+        if (
+            not force
+            and STATE.hardware_payload is not None
+            and now - STATE.hardware_updated_at < cache_seconds
+        ):
+            return STATE.hardware_payload
+
+        helper = Path(CONFIG["hardware_helper_path"])
+        if not helper.exists():
+            payload = unavailable_hardware(f"Helper not found: {helper}")
+        else:
+            try:
+                result = subprocess.run(
+                    [str(helper)],
+                    cwd=str(helper.parent),
+                    capture_output=True,
+                    text=True,
+                    encoding="utf-8",
+                    errors="replace",
+                    timeout=float(CONFIG.get("hardware_helper_timeout_seconds", 8)),
+                    creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),
+                    check=False,
+                )
+
+                if result.returncode != 0:
+                    error = result.stderr.strip() or result.stdout.strip()
+                    payload = unavailable_hardware(
+                        f"Helper exited with code {result.returncode}: {error}"
+                    )
+                else:
+                    payload = json.loads(result.stdout)
+                    payload.setdefault("provider", "LibreHardwareMonitor")
+                    payload.setdefault("available", True)
+                    payload.setdefault("summary", {})
+                    payload.setdefault("hardware", [])
+            except subprocess.TimeoutExpired:
+                payload = unavailable_hardware("Helper timed out")
+            except json.JSONDecodeError as exc:
+                payload = unavailable_hardware(f"Invalid helper JSON: {exc}")
+            except Exception as exc:
+                payload = unavailable_hardware(str(exc))
+
+        STATE.hardware_payload = payload
+        STATE.hardware_updated_at = now
+        return payload
+
+
 def status_payload():
     memory = psutil.virtual_memory()
     boot_time = psutil.boot_time()
@@ -324,6 +324,7 @@ def status_payload():
         "disk_inventory",
         "network_adapters",
         "iperf3_supervision",
+        "hardware_monitoring",
     ]
 
     return {
@@ -331,8 +332,7 @@ def status_payload():
             "name": "Network Dashboard Agent",
             "version": STATE.version,
             "started_at": datetime.fromtimestamp(
-                STATE.started_at,
-                timezone.utc,
+                STATE.started_at, timezone.utc
             ).isoformat(timespec="seconds"),
             "capabilities": capabilities,
         },
@@ -342,13 +342,9 @@ def status_payload():
             "platform": sys.platform,
             "python_version": sys.version.split()[0],
             "boot_time": datetime.fromtimestamp(
-                boot_time,
-                timezone.utc,
+                boot_time, timezone.utc
             ).isoformat(timespec="seconds"),
-            "uptime_seconds": max(
-                0,
-                int(time.time() - boot_time),
-            ),
+            "uptime_seconds": max(0, int(time.time() - boot_time)),
         },
         "operating_system": windows_information(),
         "processor": processor_information(),
@@ -359,107 +355,72 @@ def status_payload():
             "memory_available_bytes": memory.available,
             "memory_used_bytes": memory.used,
         },
+        "hardware": hardware_information(),
         "disks": disk_information(),
         "network_adapters": network_information(),
         "services": {
             "iperf3": {
                 "running": STATE.iperf_running(),
                 "port": int(CONFIG["iperf_port"]),
-            }
+            },
+            "hardware_helper": {
+                "available": bool(hardware_information().get("available")),
+                "path": str(CONFIG["hardware_helper_path"]),
+            },
         },
-        "timestamp": datetime.now(
-            timezone.utc
-        ).isoformat(timespec="seconds"),
+        "timestamp": datetime.now(timezone.utc).isoformat(timespec="seconds"),
     }
 
 
 class Handler(BaseHTTPRequestHandler):
     def authorised(self):
-        token = str(
-            CONFIG.get("api_token", "")
-        ).strip()
-
-        return (
-            not token
-            or self.headers.get(
-                "Authorization",
-                "",
-            ) == f"Bearer {token}"
-        )
+        token = str(CONFIG.get("api_token", "")).strip()
+        return not token or self.headers.get("Authorization", "") == f"Bearer {token}"
 
     def send_json(self, code, payload):
-        body = json.dumps(
-            payload,
-            indent=2,
-        ).encode("utf-8")
-
+        body = json.dumps(payload, indent=2).encode("utf-8")
         self.send_response(code)
-        self.send_header(
-            "Content-Type",
-            "application/json",
-        )
-        self.send_header(
-            "Content-Length",
-            str(len(body)),
-        )
-        self.send_header(
-            "Cache-Control",
-            "no-store",
-        )
+        self.send_header("Content-Type", "application/json")
+        self.send_header("Content-Length", str(len(body)))
+        self.send_header("Cache-Control", "no-store")
         self.end_headers()
         self.wfile.write(body)
 
     def do_GET(self):
         if not self.authorised():
-            return self.send_json(
-                401,
-                {"error": "Unauthorized"},
-            )
+            return self.send_json(401, {"error": "Unauthorized"})
 
         if self.path in ("/", "/status"):
-            return self.send_json(
-                200,
-                status_payload(),
-            )
+            return self.send_json(200, status_payload())
+
+        if self.path == "/hardware":
+            return self.send_json(200, hardware_information(force=True))
 
         if self.path == "/health":
+            hardware = hardware_information()
             return self.send_json(
                 200,
                 {
                     "ok": True,
                     "iperf3": STATE.iperf_running(),
+                    "hardware": bool(hardware.get("available")),
                     "version": STATE.version,
                 },
             )
 
-        return self.send_json(
-            404,
-            {"error": "Not found"},
-        )
+        return self.send_json(404, {"error": "Not found"})
 
     def log_message(self, format_string, *args):
-        log(
-            f"HTTP {self.client_address[0]} "
-            f"{format_string % args}"
-        )
+        log(f"HTTP {self.client_address[0]} {format_string % args}")
 
 
 def serve():
     server = ThreadingHTTPServer(
-        (
-            CONFIG["bind_address"],
-            int(CONFIG["agent_port"]),
-        ),
+        (CONFIG["bind_address"], int(CONFIG["agent_port"])),
         Handler,
     )
-
     server.timeout = 1
-
-    log(
-        f"API listening on "
-        f"{CONFIG['bind_address']}:"
-        f"{CONFIG['agent_port']}"
-    )
+    log(f"API listening on {CONFIG['bind_address']}:{CONFIG['agent_port']}")
 
     while not STATE.stop.is_set():
         server.handle_request()
@@ -467,62 +428,36 @@ def serve():
     server.server_close()
 
 
-class NetworkDashboardAgentService(
-    win32serviceutil.ServiceFramework
-):
+class NetworkDashboardAgentService(win32serviceutil.ServiceFramework):
     _svc_name_ = "NetworkDashboardAgent"
     _svc_display_name_ = "Network Dashboard Agent"
     _svc_description_ = (
-        "Provides system status and supervises iperf3 "
+        "Provides system and hardware status and supervises iperf3 "
         "for Network Dashboard."
     )
 
     def __init__(self, args):
         super().__init__(args)
-        self.stop_handle = win32event.CreateEvent(
-            None,
-            0,
-            0,
-            None,
-        )
+        self.stop_handle = win32event.CreateEvent(None, 0, 0, None)
 
     def SvcStop(self):
-        self.ReportServiceStatus(
-            win32service.SERVICE_STOP_PENDING
-        )
+        self.ReportServiceStatus(win32service.SERVICE_STOP_PENDING)
         STATE.stop.set()
         stop_iperf()
         win32event.SetEvent(self.stop_handle)
 
     def SvcDoRun(self):
         log("Service starting")
-
-        threading.Thread(
-            target=supervise,
-            daemon=True,
-        ).start()
-
-        threading.Thread(
-            target=serve,
-            daemon=True,
-        ).start()
-
-        win32event.WaitForSingleObject(
-            self.stop_handle,
-            win32event.INFINITE,
-        )
-
+        threading.Thread(target=supervise, daemon=True).start()
+        threading.Thread(target=serve, daemon=True).start()
+        win32event.WaitForSingleObject(self.stop_handle, win32event.INFINITE)
         log("Service stopped")
 
 
 if __name__ == "__main__":
     if len(sys.argv) == 1:
         servicemanager.Initialize()
-        servicemanager.PrepareToHostSingle(
-            NetworkDashboardAgentService
-        )
+        servicemanager.PrepareToHostSingle(NetworkDashboardAgentService)
         servicemanager.StartServiceCtrlDispatcher()
     else:
-        win32serviceutil.HandleCommandLine(
-            NetworkDashboardAgentService
-        )
+        win32serviceutil.HandleCommandLine(NetworkDashboardAgentService)

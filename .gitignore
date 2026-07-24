@@ -20,3 +20,12 @@ __pycache__/
 *.db
 *.db-shm
 *.db-wal
+
+# .NET build output
+**/bin/
+**/obj/
+**/publish/
+
+# Hardware helper diagnostics
+hardware-output.json
+hardware-diagnostic.log

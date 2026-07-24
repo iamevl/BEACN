@@ -11,6 +11,7 @@ services:
       APP_PORT: "8766"
       IPERF_PORT: "5201"
       DATA_DIR: "/data"
+      AGENT_TIMEOUT: "20"
       TZ: "Europe/London"
     volumes:
       - ./data:/data

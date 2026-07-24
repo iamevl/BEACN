@@ -138,6 +138,41 @@
     }
     .disk-card, .adapter-card, .service-card, .chart-card { margin-bottom: 10px; }
     .info-box small { display: block; margin-bottom: 5px; }
+    .hardware-summary {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+      gap: 12px;
+      margin-bottom: 18px;
+    }
+    .hardware-metric {
+      background: linear-gradient(145deg, #1b2841, #152038);
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      padding: 16px;
+      min-height: 118px;
+    }
+    .hardware-metric small { display: block; margin-bottom: 7px; }
+    .hardware-metric strong { display: block; font-size: 25px; line-height: 1.15; }
+    .hardware-metric .secondary { margin-top: 7px; color: var(--muted); font-size: 12px; }
+    .hardware-metric.good-state, .sensor-card.good-state { border-color: rgba(110,231,183,.45); }
+    .hardware-metric.warn-state, .sensor-card.warn-state { border-color: rgba(251,191,36,.65); }
+    .hardware-metric.bad-state, .sensor-card.bad-state { border-color: rgba(251,113,133,.75); }
+    .sensor-group { margin-top: 20px; }
+    .sensor-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+      gap: 10px;
+    }
+    .sensor-card, .hardware-device {
+      background: var(--panel2);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 13px;
+    }
+    .sensor-card small { display: block; margin-bottom: 5px; }
+    .sensor-card strong { font-size: 18px; }
+    .sensor-card .range { margin-top: 5px; color: var(--muted); font-size: 11px; }
+    .hardware-device { margin-bottom: 10px; }
     .progress-block { margin-bottom: 18px; }
     .progress-label, .row-between {
       display: flex;
@@ -266,6 +301,7 @@
         <button class="tab" data-tab="storage">Storage</button>
         <button class="tab" data-tab="network">Network</button>
         <button class="tab" data-tab="performance">Performance</button>
+        <button class="tab" data-tab="hardware">Hardware</button>
         <button class="tab" data-tab="services">Services</button>
         <button class="tab" data-tab="history">History</button>
       </div>
@@ -274,6 +310,7 @@
       <section id="tab-storage" class="tab-panel"></section>
       <section id="tab-network" class="tab-panel"></section>
       <section id="tab-performance" class="tab-panel"></section>
+      <section id="tab-hardware" class="tab-panel"></section>
       <section id="tab-services" class="tab-panel"></section>
       <section id="tab-history" class="tab-panel"></section>
     </div>
@@ -365,6 +402,164 @@
     return {icon: '🔌', label: name};
   }
 
+  function finite(value) {
+    const number = Number(value);
+    return Number.isFinite(number) ? number : null;
+  }
+
+  function hardwareDevices(hardware) {
+    const result = [];
+    const visit = item => {
+      if (!item || typeof item !== 'object') return;
+      result.push(item);
+      (item.subHardware || []).forEach(visit);
+    };
+    (hardware?.hardware || []).forEach(visit);
+    return result;
+  }
+
+  function sensorsFor(device, type, pattern = null) {
+    return (device?.sensors || []).filter(sensor => {
+      if (String(sensor.type || '').toLowerCase() !== String(type).toLowerCase()) return false;
+      if (finite(sensor.value) == null) return false;
+      return !pattern || pattern.test(String(sensor.name || ''));
+    });
+  }
+
+  function firstSensor(device, type, names = []) {
+    const sensors = sensorsFor(device, type);
+    for (const name of names) {
+      const sensor = sensors.find(item =>
+        String(item.name || '').toLowerCase() === String(name).toLowerCase()
+      );
+      if (sensor) return sensor;
+    }
+    return sensors[0] || null;
+  }
+
+  function temperatureState(value, warning = 75, critical = 90) {
+    const number = finite(value);
+    if (number == null) return '';
+    if (number >= critical) return 'bad-state';
+    if (number >= warning) return 'warn-state';
+    return 'good-state';
+  }
+
+  function hardwareMetric(label, value, secondary = '', state = '') {
+    return `<div class="hardware-metric ${state}">
+      <small>${esc(label)}</small>
+      <strong>${esc(value)}</strong>
+      <div class="secondary">${esc(secondary)}</div>
+    </div>`;
+  }
+
+  function sensorCard(sensor, unit = '', warning = null, critical = null) {
+    const value = finite(sensor?.value);
+    if (value == null) return '';
+    const minimum = finite(sensor.minimum ?? sensor.min);
+    const maximum = finite(sensor.maximum ?? sensor.max);
+    const state = warning == null ? '' : temperatureState(value, warning, critical);
+    const range = minimum != null && maximum != null
+      ? `Min ${minimum.toFixed(1)}${unit} · Max ${maximum.toFixed(1)}${unit}`
+      : '';
+    return `<div class="sensor-card ${state}">
+      <small>${esc(sensor.name || 'Sensor')}</small>
+      <strong>${value.toFixed(1)}${esc(unit)}</strong>
+      <div class="range">${esc(range)}</div>
+    </div>`;
+  }
+
+  function renderHardware(device, agent) {
+    const panel = document.getElementById('tab-hardware');
+    const hardware = agent?.hardware;
+
+    if (!device) {
+      panel.innerHTML = '<div class="empty">Select a device.</div>';
+      return;
+    }
+
+    if (!hardware?.available) {
+      panel.innerHTML = `<div class="empty">
+        Hardware monitoring is unavailable for this device.
+        ${hardware?.error ? `<div class="bad" style="margin-top:8px">${esc(hardware.error)}</div>` : ''}
+      </div>`;
+      return;
+    }
+
+    const devices = hardwareDevices(hardware);
+    const cpuDevice = devices.find(item => String(item.type).toLowerCase() === 'cpu');
+    const ramDevice = devices.find(item => item.identifier === '/ram')
+      || devices.find(item => String(item.type).toLowerCase() === 'memory' && !String(item.identifier).includes('/dimm/'));
+    const dimmDevices = devices.filter(item =>
+      String(item.identifier || '').includes('/memory/dimm/')
+      || /dimm/i.test(String(item.name || ''))
+    );
+    const gpuDevices = devices.filter(item => /^gpu/i.test(String(item.type || '')));
+
+    const cpuTemp = finite(hardware.summary?.cpuTemperatureC);
+    const cpuPower = finite(hardware.summary?.cpuPowerW);
+    const cpuLoad = firstSensor(cpuDevice, 'Load', ['CPU Total']);
+    const ramLoad = firstSensor(ramDevice, 'Load', ['Memory']);
+    const clocks = sensorsFor(cpuDevice, 'Clock', /^(P-Core|E-Core|CPU Core)/i);
+    const fastestClock = clocks.reduce((max, sensor) => Math.max(max, finite(sensor.value) || 0), 0);
+    const coreTemps = sensorsFor(cpuDevice, 'Temperature', /^(P-Core|E-Core|CPU Core) #?\d+$/i);
+    const dimmTemps = dimmDevices.flatMap(item => sensorsFor(item, 'Temperature'));
+    const fans = Array.isArray(hardware.summary?.fans) ? hardware.summary.fans : [];
+
+    const gpuCards = gpuDevices.map(gpu => {
+      const load = firstSensor(gpu, 'Load', ['GPU Core', 'D3D 3D', 'GPU Total']);
+      const clock = firstSensor(gpu, 'Clock', ['GPU Core']);
+      const power = firstSensor(gpu, 'Power', ['GPU Power']);
+      const temp = firstSensor(gpu, 'Temperature', ['GPU Core', 'GPU Hot Spot']);
+      const details = [
+        load ? `${finite(load.value).toFixed(1)}% load` : '',
+        clock ? `${finite(clock.value).toFixed(0)} MHz` : '',
+        power ? `${finite(power.value).toFixed(1)} W` : '',
+        temp ? `${finite(temp.value).toFixed(1)}°C` : ''
+      ].filter(Boolean).join(' · ');
+      return `<div class="hardware-device">
+        <div class="row-between"><strong>${esc(gpu.name)}</strong><span class="badge">${esc(gpu.type)}</span></div>
+        <div class="muted" style="margin-top:7px">${esc(details || 'No live GPU sensors reported.')}</div>
+      </div>`;
+    }).join('');
+
+    panel.innerHTML = `
+      <div class="row-between" style="margin-bottom:14px">
+        <div>
+          <h3 style="margin-bottom:4px">Live hardware health</h3>
+          <div class="muted">${esc(hardware.provider || 'Hardware provider')}${hardware.providerVersion ? ` · v${esc(hardware.providerVersion)}` : ''}</div>
+        </div>
+        <span class="badge good">Available</span>
+      </div>
+      <div class="hardware-summary">
+        ${hardwareMetric('CPU temperature', cpuTemp == null ? '—' : `${cpuTemp.toFixed(1)}°C`, cpuDevice?.name || 'CPU package', temperatureState(cpuTemp))}
+        ${hardwareMetric('CPU power', cpuPower == null ? '—' : `${cpuPower.toFixed(1)} W`, 'Package power')}
+        ${hardwareMetric('CPU load', cpuLoad ? `${finite(cpuLoad.value).toFixed(1)}%` : '—', 'Current utilisation')}
+        ${hardwareMetric('Fastest core', fastestClock ? `${(fastestClock / 1000).toFixed(2)} GHz` : '—', `${clocks.length} clock sensors`)}
+        ${hardwareMetric('Memory load', ramLoad ? `${finite(ramLoad.value).toFixed(1)}%` : '—', `${dimmDevices.length} DIMM devices`)}
+        ${hardwareMetric('Cooling fans', String(fans.length), fans.length ? 'RPM sensors detected' : 'No fan sensors exposed')}
+      </div>
+      <div class="sensor-group">
+        <h3>CPU core temperatures</h3>
+        ${coreTemps.length ? `<div class="sensor-grid">${coreTemps.map(sensor => sensorCard(sensor, '°C', 80, 95)).join('')}</div>` : '<div class="empty">No individual CPU core temperatures reported.</div>'}
+      </div>
+      <div class="sensor-group">
+        <h3>Memory modules</h3>
+        ${dimmTemps.length ? `<div class="sensor-grid">${dimmTemps.map(sensor => sensorCard(sensor, '°C', 70, 85)).join('')}</div>` : '<div class="empty">No DIMM temperatures reported.</div>'}
+      </div>
+      <div class="sensor-group">
+        <h3>Graphics</h3>
+        ${gpuCards || '<div class="empty">No GPU hardware reported.</div>'}
+      </div>
+      <div class="sensor-group">
+        <h3>Fans</h3>
+        ${fans.length ? `<div class="sensor-grid">${fans.map(fan => {
+          const rpm = finite(fan.rpm ?? fan.value);
+          return `<div class="sensor-card"><small>${esc(fan.name || 'Fan')}</small><strong>${rpm == null ? '—' : rpm.toFixed(0)} RPM</strong></div>`;
+        }).join('')}</div>` : '<div class="empty">This system does not expose fan RPM data through LibreHardwareMonitor.</div>'}
+      </div>`;
+  }
+
   function render(device, agent) {
     document.getElementById('heroName').textContent =
       device?.hostname || device?.ip || 'No device selected';
@@ -373,6 +568,8 @@
     const processor = agent?.processor;
     const performance = agent?.performance;
     const capabilities = agent?.agent?.capabilities || [];
+
+    renderHardware(device, agent);
 
     document.getElementById('heroSubtitle').textContent = os
       ? `${os.product_name}${os.display_version ? ` · ${os.display_version}` : ''}`
@@ -711,7 +908,7 @@
       liveTimer = null;
     }
 
-    if (!liveEnabled || activeTab !== 'performance') return;
+    if (!liveEnabled || !['performance', 'hardware'].includes(activeTab)) return;
 
     liveTimer = setInterval(async () => {
       if (document.hidden) return;
