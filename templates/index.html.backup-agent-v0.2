@@ -122,11 +122,6 @@
           <tr><th>MAC</th><td id="dMac">—</td></tr>
           <tr><th>Vendor</th><td id="dVendor">—</td></tr>
           <tr><th>Status</th><td id="dOnline">—</td></tr>
-          <tr><th>Agent</th><td id="dAgent">—</td></tr>
-          <tr><th>Agent hostname</th><td id="dAgentHostname">—</td></tr>
-          <tr><th>CPU</th><td id="dCpu">—</td></tr>
-          <tr><th>Memory</th><td id="dMemory">—</td></tr>
-          <tr><th>Uptime</th><td id="dUptime">—</td></tr>
           <tr><th>iperf3</th><td id="dIperf">—</td></tr>
           <tr><th>Last seen</th><td id="dLastSeen">—</td></tr>
         </tbody>
@@ -158,21 +153,6 @@
     return `${(bps / 1e6).toFixed(1)} Mbps`;
   }
 
-  function formatUptime(seconds) {
-    if (seconds === null || seconds === undefined) return '—';
-
-    const total = Number(seconds);
-    const days = Math.floor(total / 86400);
-    const hours = Math.floor((total % 86400) / 3600);
-    const minutes = Math.floor((total % 3600) / 60);
-
-    const parts = [];
-    if (days) parts.push(`${days}d`);
-    if (hours || days) parts.push(`${hours}h`);
-    parts.push(`${minutes}m`);
-    return parts.join(' ');
-  }
-
   function renderSelected() {
     const d = selectedDevice();
     document.getElementById('dIp').textContent = d?.ip || '—';
@@ -180,35 +160,7 @@
     document.getElementById('dMac').textContent = d?.mac || '—';
     document.getElementById('dVendor').textContent = d?.vendor || '—';
     document.getElementById('dOnline').innerHTML = d ? (d.is_online ? '<span class="good">Online</span>' : '<span class="bad">Offline</span>') : '—';
-
-    document.getElementById('dAgent').innerHTML = d
-      ? (d.agent_available
-          ? `<span class="good">Connected · v${d.agent_version || '?'}</span>`
-          : '<span class="bad">Not detected</span>')
-      : '—';
-
-    document.getElementById('dAgentHostname').textContent =
-      d?.agent_hostname || '—';
-
-    document.getElementById('dCpu').textContent =
-      d?.cpu_percent !== null && d?.cpu_percent !== undefined
-        ? `${Number(d.cpu_percent).toFixed(1)}%`
-        : '—';
-
-    document.getElementById('dMemory').textContent =
-      d?.memory_percent !== null && d?.memory_percent !== undefined
-        ? `${Number(d.memory_percent).toFixed(1)}%`
-        : '—';
-
-    document.getElementById('dUptime').textContent =
-      formatUptime(d?.uptime_seconds);
-
-    document.getElementById('dIperf').innerHTML = d
-      ? (d.iperf_available
-          ? '<span class="good">Available</span>'
-          : '<span class="bad">Not detected</span>')
-      : '—';
-
+    document.getElementById('dIperf').innerHTML = d ? (d.iperf_available ? '<span class="good">Available</span>' : '<span class="bad">Not detected</span>') : '—';
     document.getElementById('dLastSeen').textContent = d?.last_seen || '—';
     document.getElementById('iperfBtn').disabled = !d?.iperf_available;
     document.getElementById('iperfReverseBtn').disabled = !d?.iperf_available;
@@ -221,9 +173,8 @@
     devices = payload.devices;
     select.innerHTML = devices.map(d => {
       const name = d.hostname ? `${d.hostname} · ` : '';
-      const agent = d.agent_available ? ' · Agent' : '';
       const suffix = d.iperf_available ? ' · iperf3' : '';
-      return `<option value="${d.ip}">${name}${d.ip}${agent}${suffix}</option>`;
+      return `<option value="${d.ip}">${name}${d.ip}${suffix}</option>`;
     }).join('');
     if (devices.some(d => d.ip === old)) select.value = old;
 

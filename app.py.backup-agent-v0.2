@@ -6,8 +6,6 @@ import socket
 import sqlite3
 import subprocess
 import threading
-import urllib.error
-import urllib.request
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -16,8 +14,6 @@ from flask import Flask, jsonify, render_template, request
 APP_PORT = int(os.getenv("APP_PORT", "8766"))
 NETWORK_SUBNET = os.getenv("NETWORK_SUBNET", "192.168.1.0/24")
 IPERF_PORT = int(os.getenv("IPERF_PORT", "5201"))
-AGENT_PORT = int(os.getenv("AGENT_PORT", "8767"))
-AGENT_TIMEOUT = float(os.getenv("AGENT_TIMEOUT", "1.5"))
 SCAN_TIMEOUT = int(os.getenv("SCAN_TIMEOUT", "90"))
 COMMAND_TIMEOUT = int(os.getenv("COMMAND_TIMEOUT", "20"))
 DATA_DIR = Path(os.getenv("DATA_DIR", "/data"))
@@ -61,27 +57,6 @@ def init_db():
         );
         """)
 
-        existing_columns = {
-            row["name"]
-            for row in conn.execute("PRAGMA table_info(devices)").fetchall()
-        }
-
-        migrations = {
-            "agent_available": "INTEGER NOT NULL DEFAULT 0",
-            "agent_version": "TEXT",
-            "agent_hostname": "TEXT",
-            "cpu_percent": "REAL",
-            "memory_percent": "REAL",
-            "uptime_seconds": "INTEGER",
-            "agent_last_seen": "TEXT"
-        }
-
-        for column, definition in migrations.items():
-            if column not in existing_columns:
-                conn.execute(
-                    f"ALTER TABLE devices ADD COLUMN {column} {definition}"
-                )
-
 def valid_target(value):
     try:
         ip = ipaddress.ip_address(value)
@@ -120,35 +95,6 @@ def tcp_open(ip, port, timeout=0.5):
             return True
     except OSError:
         return False
-
-def fetch_agent_status(ip):
-    url = f"http://{ip}:{AGENT_PORT}/status"
-    try:
-        request_obj = urllib.request.Request(
-            url,
-            headers={"Accept": "application/json"},
-        )
-        with urllib.request.urlopen(
-            request_obj,
-            timeout=AGENT_TIMEOUT,
-        ) as response:
-            if response.status != 200:
-                return None
-
-            payload = json.loads(response.read().decode("utf-8"))
-
-            if not isinstance(payload, dict):
-                return None
-
-            return payload
-    except (
-        urllib.error.URLError,
-        TimeoutError,
-        json.JSONDecodeError,
-        OSError,
-    ):
-        return None
-
 
 def reverse_dns(ip):
     try:
@@ -201,143 +147,26 @@ def scan_network():
                 if not valid_target(ip):
                     continue
                 found_ips.add(ip)
-                discovered_hostname = (
-                    device["hostname"] or reverse_dns(ip)
-                )
-
-                agent = fetch_agent_status(ip)
-                agent_available = int(agent is not None)
-                agent_hostname = ""
-                agent_version = ""
-                cpu_percent = None
-                memory_percent = None
-                uptime_seconds = None
-                agent_last_seen = None
-
-                if agent:
-                    agent_hostname = str(
-                        agent.get("device", {}).get("hostname", "")
-                    ).strip()
-                    agent_version = str(
-                        agent.get("agent", {}).get("version", "")
-                    ).strip()
-
-                    performance = agent.get("performance", {})
-                    cpu_percent = performance.get("cpu_percent")
-                    memory_percent = performance.get("memory_percent")
-                    uptime_seconds = agent.get(
-                        "device", {}
-                    ).get("uptime_seconds")
-                    agent_last_seen = now
-
-                    iperf_available = int(
-                        bool(
-                            agent.get("services", {})
-                            .get("iperf3", {})
-                            .get("running", False)
-                        )
-                    )
-                else:
-                    # Legacy fallback for machines without the agent.
-                    iperf_available = int(
-                        tcp_open(ip, IPERF_PORT)
-                    )
-
-                hostname = (
-                    agent_hostname
-                    or discovered_hostname
-                    or ip
-                )
-
+                hostname = device["hostname"] or reverse_dns(ip)
+                iperf_available = int(tcp_open(ip, IPERF_PORT))
                 existing = conn.execute(
-                    "SELECT first_seen FROM devices WHERE ip = ?",
-                    (ip,),
+                    "SELECT first_seen FROM devices WHERE ip = ?", (ip,)
                 ).fetchone()
                 first_seen = existing["first_seen"] if existing else now
-
                 conn.execute("""
-                    INSERT INTO devices (
-                        ip,
-                        hostname,
-                        mac,
-                        vendor,
-                        is_online,
-                        iperf_available,
-                        first_seen,
-                        last_seen,
-                        agent_available,
-                        agent_version,
-                        agent_hostname,
-                        cpu_percent,
-                        memory_percent,
-                        uptime_seconds,
-                        agent_last_seen
-                    )
-                    VALUES (
-                        ?, ?, ?, ?, 1, ?, ?, ?,
-                        ?, ?, ?, ?, ?, ?, ?
-                    )
+                    INSERT INTO devices
+                        (ip, hostname, mac, vendor, is_online, iperf_available, first_seen, last_seen)
+                    VALUES (?, ?, ?, ?, 1, ?, ?, ?)
                     ON CONFLICT(ip) DO UPDATE SET
                         hostname = excluded.hostname,
-                        mac = CASE
-                            WHEN excluded.mac <> ''
-                            THEN excluded.mac
-                            ELSE devices.mac
-                        END,
-                        vendor = CASE
-                            WHEN excluded.vendor <> ''
-                            THEN excluded.vendor
-                            ELSE devices.vendor
-                        END,
+                        mac = CASE WHEN excluded.mac <> '' THEN excluded.mac ELSE devices.mac END,
+                        vendor = CASE WHEN excluded.vendor <> '' THEN excluded.vendor ELSE devices.vendor END,
                         is_online = 1,
                         iperf_available = excluded.iperf_available,
-                        last_seen = excluded.last_seen,
-                        agent_available = excluded.agent_available,
-                        agent_version = CASE
-                            WHEN excluded.agent_available = 1
-                            THEN excluded.agent_version
-                            ELSE devices.agent_version
-                        END,
-                        agent_hostname = CASE
-                            WHEN excluded.agent_available = 1
-                            THEN excluded.agent_hostname
-                            ELSE devices.agent_hostname
-                        END,
-                        cpu_percent = CASE
-                            WHEN excluded.agent_available = 1
-                            THEN excluded.cpu_percent
-                            ELSE devices.cpu_percent
-                        END,
-                        memory_percent = CASE
-                            WHEN excluded.agent_available = 1
-                            THEN excluded.memory_percent
-                            ELSE devices.memory_percent
-                        END,
-                        uptime_seconds = CASE
-                            WHEN excluded.agent_available = 1
-                            THEN excluded.uptime_seconds
-                            ELSE devices.uptime_seconds
-                        END,
-                        agent_last_seen = CASE
-                            WHEN excluded.agent_available = 1
-                            THEN excluded.agent_last_seen
-                            ELSE devices.agent_last_seen
-                        END
+                        last_seen = excluded.last_seen
                 """, (
-                    ip,
-                    hostname,
-                    device["mac"],
-                    device["vendor"],
-                    iperf_available,
-                    first_seen,
-                    now,
-                    agent_available,
-                    agent_version,
-                    agent_hostname,
-                    cpu_percent,
-                    memory_percent,
-                    uptime_seconds,
-                    agent_last_seen,
+                    ip, hostname, device["mac"], device["vendor"],
+                    iperf_available, first_seen, now
                 ))
     except Exception as exc:
         scan_state["last_error"] = str(exc)
@@ -369,22 +198,8 @@ def index():
 def devices():
     with db() as conn:
         rows = conn.execute("""
-            SELECT
-                ip,
-                hostname,
-                mac,
-                vendor,
-                is_online,
-                iperf_available,
-                first_seen,
-                last_seen,
-                agent_available,
-                agent_version,
-                agent_hostname,
-                cpu_percent,
-                memory_percent,
-                uptime_seconds,
-                agent_last_seen
+            SELECT ip, hostname, mac, vendor, is_online, iperf_available,
+                   first_seen, last_seen
             FROM devices
             ORDER BY is_online DESC,
                      CAST(substr(ip, instr(ip, '.') + 1) AS INTEGER),
