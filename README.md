@@ -19,6 +19,8 @@ general shell or arbitrary command execution.
 Keep this dashboard LAN-only, or protect it with Cloudflare Access, a VPN, or
 another authentication layer before exposing it publicly.
 
+<img width="1397" height="865" alt="Screenshot 1" src="https://github.com/user-attachments/assets/f07c3992-775b-4912-9c1a-7e5618be74cf" />
+
 ## Install on the Pi
 
 1. Extract this folder to:
