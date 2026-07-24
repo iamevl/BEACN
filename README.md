@@ -34,7 +34,7 @@ another authentication layer before exposing it publicly.
 
 3. Open:
 
-   `http://192.168.1.254:8766`
+   `http://192.168.1.***:8766`
 
 ## Manage it in Portainer
 
