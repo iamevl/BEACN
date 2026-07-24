@@ -130,7 +130,7 @@ def scan_network():
     scan_state["last_error"] = None
     try:
         result = run_command(
-            ["nmap", "-sn", "-n", "--send-ip", NETWORK_SUBNET],
+            ["nmap", "-sn", "-n", NETWORK_SUBNET],
             timeout=SCAN_TIMEOUT,
         )
         if not result["ok"] and not result["stdout"]:
