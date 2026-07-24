@@ -5,25 +5,226 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>{{ app_name }}</title>
   <style>
-    :root{color-scheme:dark;--bg:#0b1020;--panel:#121a2d;--panel2:#182238;--text:#e8eefc;--muted:#95a4c4;--accent:#6ee7b7;--warning:#fbbf24;--danger:#fb7185;--border:#26334f}
-    *{box-sizing:border-box}body{margin:0;font-family:Inter,ui-sans-serif,system-ui,-apple-system,Segoe UI,sans-serif;background:radial-gradient(circle at top,#15213a 0,var(--bg) 42%);color:var(--text)}
-    main{max-width:1240px;margin:0 auto;padding:28px 18px 48px}h1,h2,h3{margin-top:0}h1{margin-bottom:6px;font-size:28px}h2{margin-bottom:14px;font-size:18px}h3{margin-bottom:10px;font-size:15px}p,small,.muted{color:var(--muted)}
-    .title-row,.toolbar,.row-between,.device-hero{display:flex;gap:12px;align-items:center}.title-row{flex-wrap:wrap}.grid{display:grid;gap:16px}.metrics{grid-template-columns:repeat(auto-fit,minmax(160px,1fr));margin:20px 0}.two{grid-template-columns:minmax(300px,.8fr) minmax(460px,1.4fr)}
-    .card{background:rgba(18,26,45,.94);border:1px solid var(--border);border-radius:16px;padding:18px}.metric strong{display:block;font-size:26px;margin-top:6px}
-    label{display:block;margin-bottom:8px;color:var(--muted);font-size:14px}select,button{width:100%;border-radius:11px;border:1px solid var(--border);background:var(--panel2);color:var(--text);padding:11px 12px;font-size:15px}button{cursor:pointer;font-weight:650}button:hover{border-color:var(--accent)}button.primary{background:var(--accent);color:#062419;border:0}button:disabled{opacity:.45;cursor:not-allowed}
-    .buttons{display:grid;grid-template-columns:repeat(2,1fr);gap:10px;margin-top:14px}.status{min-height:24px;color:var(--muted);margin-top:12px}.badge{display:inline-flex;align-items:center;padding:4px 9px;border-radius:999px;background:#20304a;font-size:12px;gap:5px}.good{color:var(--accent)}.warn{color:var(--warning)}.bad{color:var(--danger)}
-    .device-hero{justify-content:space-between;align-items:flex-start;padding-bottom:16px;border-bottom:1px solid var(--border)}.device-hero h2{margin-bottom:4px;font-size:24px}.tabs{display:flex;gap:6px;overflow-x:auto;margin:16px 0}.tab{width:auto;white-space:nowrap;padding:8px 11px;font-size:13px;background:transparent}.tab.active{background:var(--panel2);border-color:var(--accent);color:var(--accent)}.tab-panel{display:none}.tab-panel.active{display:block}
-    .info-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:12px}.info-box,.disk-card,.adapter-card,.service-card{background:var(--panel2);border:1px solid var(--border);border-radius:12px;padding:13px}.disk-card,.adapter-card,.service-card{margin-bottom:10px}.info-box small{display:block;margin-bottom:5px}.progress-block{margin-bottom:18px}.progress-label,.row-between{justify-content:space-between}.progress-track{height:11px;background:#080d19;border:1px solid var(--border);border-radius:999px;overflow:hidden}.progress-fill{height:100%;background:var(--accent)}.progress-fill.warning{background:var(--warning)}.progress-fill.danger{background:var(--danger)}
-    .capabilities{display:flex;flex-wrap:wrap;gap:7px;margin-top:10px}.empty{color:var(--muted);padding:16px 0}table{width:100%;border-collapse:collapse}th,td{text-align:left;padding:10px 8px;border-bottom:1px solid var(--border);font-size:14px}th{color:var(--muted)}
-    pre{white-space:pre-wrap;word-break:break-word;max-height:360px;overflow:auto;background:#080d19;border:1px solid var(--border);border-radius:12px;padding:14px;color:#d9e3f7;min-height:170px}
-    @media(max-width:900px){.two{grid-template-columns:1fr}}@media(max-width:600px){.buttons{grid-template-columns:1fr}.device-hero{flex-direction:column}}
+    :root {
+      color-scheme: dark;
+      --bg: #0b1020;
+      --panel: #121a2d;
+      --panel2: #182238;
+      --text: #e8eefc;
+      --muted: #95a4c4;
+      --accent: #6ee7b7;
+      --warning: #fbbf24;
+      --danger: #fb7185;
+      --border: #26334f;
+      --chart-grid: #24324e;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, sans-serif;
+      background: radial-gradient(circle at top, #15213a 0, var(--bg) 42%);
+      color: var(--text);
+    }
+    main { max-width: 1240px; margin: 0 auto; padding: 28px 18px 48px; }
+    h1, h2, h3 { margin-top: 0; }
+    h1 { margin-bottom: 6px; font-size: 28px; }
+    h2 { margin-bottom: 14px; font-size: 18px; }
+    h3 { margin-bottom: 10px; font-size: 15px; }
+    p, small, .muted { color: var(--muted); }
+    .title-row, .toolbar, .row-between, .device-hero {
+      display: flex; gap: 12px; align-items: center;
+    }
+    .title-row { flex-wrap: wrap; }
+    .grid { display: grid; gap: 16px; }
+    .metrics {
+      grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+      margin: 20px 0;
+    }
+    .two {
+      grid-template-columns: minmax(300px, .78fr) minmax(500px, 1.5fr);
+    }
+    .card {
+      background: rgba(18, 26, 45, .94);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      padding: 18px;
+    }
+    .metric strong { display: block; font-size: 26px; margin-top: 6px; }
+    label {
+      display: block; margin-bottom: 8px;
+      color: var(--muted); font-size: 14px;
+    }
+    select, button {
+      width: 100%;
+      border-radius: 11px;
+      border: 1px solid var(--border);
+      background: var(--panel2);
+      color: var(--text);
+      padding: 11px 12px;
+      font-size: 15px;
+    }
+    button { cursor: pointer; font-weight: 650; }
+    button:hover { border-color: var(--accent); }
+    button.primary { background: var(--accent); color: #062419; border: 0; }
+    button:disabled { opacity: .45; cursor: not-allowed; }
+    .buttons {
+      display: grid; grid-template-columns: repeat(2, 1fr);
+      gap: 10px; margin-top: 14px;
+    }
+    .status { min-height: 24px; color: var(--muted); margin-top: 12px; }
+    .badge {
+      display: inline-flex; align-items: center;
+      padding: 4px 9px; border-radius: 999px;
+      background: #20304a; font-size: 12px; gap: 5px;
+    }
+    .good { color: var(--accent); }
+    .warn { color: var(--warning); }
+    .bad { color: var(--danger); }
+    .device-hero {
+      justify-content: space-between; align-items: flex-start;
+      padding-bottom: 16px; border-bottom: 1px solid var(--border);
+    }
+    .device-hero h2 { margin-bottom: 4px; font-size: 24px; }
+    .tabs {
+      display: flex; gap: 6px; overflow-x: auto;
+      margin: 16px 0;
+    }
+    .tab {
+      width: auto; white-space: nowrap;
+      padding: 8px 11px; font-size: 13px;
+      background: transparent;
+    }
+    .tab.active {
+      background: var(--panel2);
+      border-color: var(--accent);
+      color: var(--accent);
+    }
+    .tab-panel { display: none; }
+    .tab-panel.active { display: block; }
+    .hero-grid {
+      display: grid;
+      grid-template-columns: 1.15fr 1fr 1fr;
+      gap: 12px;
+      margin-bottom: 14px;
+    }
+    .hero-box {
+      background: linear-gradient(145deg, #1b2841, #152038);
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      padding: 16px;
+      min-height: 116px;
+    }
+    .hero-box small { display: block; margin-bottom: 8px; }
+    .hero-box strong {
+      display: block;
+      font-size: 20px;
+      line-height: 1.25;
+    }
+    .hero-box .secondary {
+      margin-top: 6px;
+      color: var(--muted);
+      font-size: 13px;
+    }
+    .info-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(175px, 1fr));
+      gap: 12px;
+    }
+    .info-box, .disk-card, .adapter-card, .service-card, .chart-card {
+      background: var(--panel2);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 13px;
+    }
+    .disk-card, .adapter-card, .service-card, .chart-card { margin-bottom: 10px; }
+    .info-box small { display: block; margin-bottom: 5px; }
+    .progress-block { margin-bottom: 18px; }
+    .progress-label, .row-between {
+      display: flex;
+      justify-content: space-between;
+      gap: 12px;
+      align-items: center;
+    }
+    .progress-track {
+      height: 11px;
+      background: #080d19;
+      border: 1px solid var(--border);
+      border-radius: 999px;
+      overflow: hidden;
+    }
+    .progress-fill { height: 100%; background: var(--accent); }
+    .progress-fill.warning { background: var(--warning); }
+    .progress-fill.danger { background: var(--danger); }
+    .capacity-track {
+      height: 14px; margin-top: 12px;
+      background: #080d19; border-radius: 999px;
+      overflow: hidden; border: 1px solid var(--border);
+    }
+    .capacity-fill { height: 100%; background: var(--accent); }
+    .capacity-fill.warning { background: var(--warning); }
+    .capacity-fill.danger { background: var(--danger); }
+    .capabilities { display: flex; flex-wrap: wrap; gap: 7px; margin-top: 10px; }
+    .empty { color: var(--muted); padding: 16px 0; }
+    .adapter-title { display: flex; gap: 9px; align-items: center; }
+    .adapter-icon {
+      width: 28px; height: 28px;
+      display: inline-grid; place-items: center;
+      border-radius: 9px; background: #22314e;
+    }
+    .live-controls {
+      display: flex; gap: 8px; align-items: center;
+      flex-wrap: wrap; margin-bottom: 12px;
+    }
+    .live-controls button { width: auto; padding: 8px 11px; font-size: 13px; }
+    .live-indicator {
+      display: inline-flex; align-items: center; gap: 7px;
+      color: var(--muted); font-size: 13px;
+    }
+    .pulse {
+      width: 8px; height: 8px; border-radius: 50%;
+      background: var(--accent);
+      box-shadow: 0 0 0 0 rgba(110,231,183,.45);
+      animation: pulse 1.5s infinite;
+    }
+    .pulse.paused { background: var(--muted); animation: none; }
+    @keyframes pulse {
+      70% { box-shadow: 0 0 0 8px rgba(110,231,183,0); }
+      100% { box-shadow: 0 0 0 0 rgba(110,231,183,0); }
+    }
+    .chart-wrap { position: relative; height: 220px; }
+    canvas { width: 100%; height: 100%; display: block; }
+    table { width: 100%; border-collapse: collapse; }
+    th, td {
+      text-align: left; padding: 10px 8px;
+      border-bottom: 1px solid var(--border); font-size: 14px;
+    }
+    th { color: var(--muted); }
+    pre {
+      white-space: pre-wrap; word-break: break-word;
+      max-height: 360px; overflow: auto;
+      background: #080d19; border: 1px solid var(--border);
+      border-radius: 12px; padding: 14px;
+      color: #d9e3f7; min-height: 170px;
+    }
+    @media (max-width: 900px) {
+      .two { grid-template-columns: 1fr; }
+      .hero-grid { grid-template-columns: 1fr; }
+    }
+    @media (max-width: 600px) {
+      .buttons { grid-template-columns: 1fr; }
+      .device-hero { flex-direction: column; }
+    }
   </style>
 </head>
 <body>
 <main>
   <div class="title-row">
-    <div><h1>{{ app_name }}</h1><p>Discovery, diagnostics and device intelligence for {{ subnet }}.</p></div>
-    <span class="badge">v{{ app_version }}</span><span class="badge">{{ app_stage }}</span>
+    <div>
+      <h1>{{ app_name }}</h1>
+      <p>Discovery, diagnostics and live device intelligence for {{ subnet }}.</p>
+    </div>
+    <span class="badge">v{{ app_version }}</span>
+    <span class="badge">{{ app_stage }}</span>
   </div>
 
   <section class="grid metrics">
@@ -38,6 +239,7 @@
       <h2>Device tools</h2>
       <label for="deviceSelect">Discovered device</label>
       <select id="deviceSelect"></select>
+
       <div class="buttons">
         <button id="scanBtn" class="primary">Rescan network</button>
         <button id="refreshAgentBtn">Refresh agent</button>
@@ -52,53 +254,639 @@
 
     <div class="card">
       <div class="device-hero">
-        <div><h2 id="heroName">No device selected</h2><div id="heroSubtitle" class="muted">—</div></div>
+        <div>
+          <h2 id="heroName">No device selected</h2>
+          <div id="heroSubtitle" class="muted">—</div>
+        </div>
         <div id="heroStatus" class="badge">Unknown</div>
       </div>
+
       <div class="tabs">
-        <button class="tab active" data-tab="overview">Overview</button><button class="tab" data-tab="storage">Storage</button><button class="tab" data-tab="network">Network</button><button class="tab" data-tab="performance">Performance</button><button class="tab" data-tab="services">Services</button><button class="tab" data-tab="history">History</button>
+        <button class="tab active" data-tab="overview">Overview</button>
+        <button class="tab" data-tab="storage">Storage</button>
+        <button class="tab" data-tab="network">Network</button>
+        <button class="tab" data-tab="performance">Performance</button>
+        <button class="tab" data-tab="services">Services</button>
+        <button class="tab" data-tab="history">History</button>
       </div>
-      <section id="tab-overview" class="tab-panel active"></section><section id="tab-storage" class="tab-panel"></section><section id="tab-network" class="tab-panel"></section><section id="tab-performance" class="tab-panel"></section><section id="tab-services" class="tab-panel"></section><section id="tab-history" class="tab-panel"></section>
+
+      <section id="tab-overview" class="tab-panel active"></section>
+      <section id="tab-storage" class="tab-panel"></section>
+      <section id="tab-network" class="tab-panel"></section>
+      <section id="tab-performance" class="tab-panel"></section>
+      <section id="tab-services" class="tab-panel"></section>
+      <section id="tab-history" class="tab-panel"></section>
     </div>
   </section>
 
-  <section class="card" style="margin-top:16px"><div class="toolbar"><h2 style="margin:0">Output</h2><span class="badge">iperf3 port {{ iperf_port }}</span></div><pre id="output">Ready.</pre></section>
+  <section class="card" style="margin-top:16px">
+    <div class="toolbar">
+      <h2 style="margin:0">Output</h2>
+      <span class="badge">iperf3 port {{ iperf_port }}</span>
+    </div>
+    <pre id="output">Ready.</pre>
+  </section>
 </main>
 
 <script>
-let devices=[];let current=null;const select=document.getElementById('deviceSelect'),output=document.getElementById('output'),status=document.getElementById('status');
-const esc=v=>String(v??'').replaceAll('&','&amp;').replaceAll('<','&lt;').replaceAll('>','&gt;').replaceAll('"','&quot;').replaceAll("'","&#039;");
-const selected=()=>devices.find(d=>d.ip===select.value);
-function bytes(v){v=Number(v);if(!Number.isFinite(v))return'—';const u=['B','KB','MB','GB','TB','PB'];let i=0;while(v>=1000&&i<u.length-1){v/=1000;i++}return`${v.toFixed(i>=3?1:0)} ${u[i]}`}
-function uptime(s){if(s==null)return'—';s=Number(s);const d=Math.floor(s/86400),h=Math.floor(s%86400/3600),m=Math.floor(s%3600/60);return[d?`${d}d`:'',h||d?`${h}h`:'',`${m}m`].filter(Boolean).join(' ')}
-function rate(b){return b?`${(b/1e6).toFixed(1)} Mbps`:'n/a'}
-function bar(p){p=Math.max(0,Math.min(100,Number(p)||0));const c=p>=95?'danger':p>=90?'warning':'';return`<div class="progress-track"><div class="progress-fill ${c}" style="width:${p}%"></div></div>`}
-function box(l,v){return`<div class="info-box"><small>${esc(l)}</small><strong>${esc(v||'—')}</strong></div>`}
-function render(device,agent){
- document.getElementById('heroName').textContent=device?.hostname||device?.ip||'No device selected';
- const os=agent?.operating_system,proc=agent?.processor,perf=agent?.performance,caps=agent?.agent?.capabilities||[];
- document.getElementById('heroSubtitle').textContent=os?`${os.product_name}${os.display_version?' · '+os.display_version:''}`:(device?.ip||'—');
- document.getElementById('heroStatus').innerHTML=device?.is_online?'<span class="good">● Online</span>':'<span class="bad">● Offline</span>';
- document.getElementById('tab-overview').innerHTML=device?`<div class="info-grid">${box('IP address',device.ip)}${box('Hostname',device.hostname)}${box('MAC address',device.mac)}${box('Vendor',device.vendor)}${box('Operating system',os?.product_name||'Agent not available')}${box('Version',os?.display_version)}${box('Build',os?.build)}${box('Architecture',os?.architecture)}${box('Processor',proc?.model)}${box('CPU cores',proc?`${proc.physical_cores} physical · ${proc.logical_cores} logical`:'—')}${box('Installed memory',perf?bytes(perf.memory_total_bytes):'—')}${box('Uptime',uptime(agent?.device?.uptime_seconds??device.uptime_seconds))}${box('Agent',device.agent_available?`Connected · v${device.agent_version||'?'}`:'Not detected')}${box('Python',agent?.device?.python_version)}${box('iperf3',device.iperf_available?'Available':'Not detected')}${box('Last seen',device.last_seen)}</div><h3 style="margin-top:18px">Capabilities</h3><div class="capabilities">${caps.length?caps.map(c=>`<span class="badge">${esc(c.replaceAll('_',' '))}</span>`).join(''):'<span class="muted">No capabilities reported.</span>'}</div>`:'<div class="empty">Select a device.</div>';
- const disks=agent?.disks||[];document.getElementById('tab-storage').innerHTML=disks.length?disks.map(d=>{const p=Number(d.percent)||0,w=p>=95?'<span class="bad">Critical</span>':p>=90?'<span class="warn">Nearly full</span>':'<span class="good">Healthy</span>';return`<div class="disk-card"><div class="row-between"><strong>${esc(d.mountpoint||d.device)}</strong><span>${p.toFixed(1)}% · ${w}</span></div><div class="muted" style="margin:5px 0 10px">${esc(d.filesystem||'Unknown')} · ${bytes(d.used_bytes)} used · ${bytes(d.free_bytes)} free of ${bytes(d.total_bytes)}</div>${bar(p)}</div>`}).join(''):'<div class="empty">No storage inventory reported.</div>';
- const adapters=(agent?.network_adapters||[]).filter(a=>a.is_up&&!/loopback|default switch|wsl/i.test(a.name)&&(a.addresses||[]).some(x=>x.family==='IPv4'&&!String(x.address).startsWith('169.254.')&&x.address!=='127.0.0.1'));
- document.getElementById('tab-network').innerHTML=adapters.length?adapters.map(a=>{const ips=(a.addresses||[]).filter(x=>x.family==='IPv4'&&!String(x.address).startsWith('169.254.')).map(x=>esc(x.address)).join(' · ');const speed=a.speed_mbps&&a.speed_mbps<4000?`${a.speed_mbps} Mbps`:'Virtual adapter';return`<div class="adapter-card"><div class="row-between"><strong>${esc(a.name)}</strong><span class="good">Up</span></div><div style="margin-top:7px">${ips||'No IPv4 address'}</div><div class="muted" style="margin-top:5px">${speed} · MTU ${a.mtu??'—'}</div></div>`}).join(''):'<div class="empty">No active network adapters reported.</div>';
- const cpu=perf?.cpu_percent??device?.cpu_percent,mem=perf?.memory_percent??device?.memory_percent;document.getElementById('tab-performance').innerHTML=`<div class="progress-block"><div class="progress-label"><strong>CPU utilisation</strong><span>${Number(cpu||0).toFixed(1)}%</span></div>${bar(cpu)}</div><div class="progress-block"><div class="progress-label"><strong>Memory utilisation</strong><span>${Number(mem||0).toFixed(1)}%</span></div>${bar(mem)}</div><div class="info-grid">${box('Processor',proc?.model)}${box('Physical cores',proc?.physical_cores)}${box('Logical cores',proc?.logical_cores)}${box('Current frequency',proc?.frequency_current_mhz?`${(proc.frequency_current_mhz/1000).toFixed(2)} GHz`:'—')}${box('Installed memory',perf?.memory_total_bytes?bytes(perf.memory_total_bytes):'—')}${box('Available memory',perf?.memory_available_bytes?bytes(perf.memory_available_bytes):'—')}</div>`;
- const services=Object.entries(agent?.services||{});document.getElementById('tab-services').innerHTML=services.length?services.map(([n,s])=>`<div class="service-card"><div class="row-between"><strong>${esc(n)}</strong>${s.running?'<span class="good">Running</span>':'<span class="bad">Stopped</span>'}</div><div class="muted" style="margin-top:5px">${s.port?'TCP '+esc(s.port):'No port reported'}</div></div>`).join(''):'<div class="empty">No services reported.</div>';
-}
-async function history(device){const p=document.getElementById('tab-history');if(!device){p.innerHTML='<div class="empty">Select a device.</div>';return}const r=await fetch(`/api/results?target=${encodeURIComponent(device.ip)}`),j=await r.json();p.innerHTML=j.results.length?`<table><thead><tr><th>Time</th><th>Direction</th><th>Throughput</th><th>Retransmits</th></tr></thead><tbody>${j.results.map(x=>`<tr><td>${esc(x.created_at)}</td><td>${esc(x.direction)}</td><td>${esc(rate(x.bits_per_second))}</td><td>${esc(x.retransmits??'n/a')}</td></tr>`).join('')}</tbody></table>`:'<div class="empty">No saved iperf3 results for this device.</div>'}
-async function details(refresh=false){const d=selected();if(!d){render(null,null);return}const r=await fetch(`/api/device/${encodeURIComponent(d.ip)}?refresh=${refresh?'1':'0'}`),j=await r.json();current=j;render(j.device||d,j.agent);history(j.device||d);document.getElementById('refreshAgentBtn').disabled=!(j.device||d).agent_available;document.getElementById('iperfBtn').disabled=!(j.device||d).iperf_available;document.getElementById('iperfReverseBtn').disabled=!(j.device||d).iperf_available}
-async function refresh(){const r=await fetch('/api/devices'),j=await r.json(),old=select.value;devices=j.devices;select.innerHTML=devices.map(d=>`<option value="${esc(d.ip)}">${esc((d.hostname?d.hostname+' · ':'')+d.ip+(d.agent_available?' · Agent':'')+(d.iperf_available?' · iperf3':''))}</option>`).join('');if(devices.some(d=>d.ip===old))select.value=old;document.getElementById('onlineCount').textContent=devices.filter(d=>d.is_online).length;document.getElementById('agentCount').textContent=devices.filter(d=>d.agent_available).length;document.getElementById('iperfCount').textContent=devices.filter(d=>d.iperf_available).length;document.getElementById('lastRefresh').textContent=new Date().toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'});status.textContent=j.scan.running?'Network scan running…':(j.scan.last_error||'');await details(false)}
-async function post(url,body){status.textContent='Working…';output.textContent='Running command…';const r=await fetch(url,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body||{})}),j=await r.json();if(!r.ok)throw new Error(j.error||'Request failed');status.textContent=j.message||(j.ok?'Complete.':'Command returned an error.');return j}
-document.querySelectorAll('.tab').forEach(b=>b.onclick=()=>{document.querySelectorAll('.tab').forEach(x=>x.classList.remove('active'));document.querySelectorAll('.tab-panel').forEach(x=>x.classList.remove('active'));b.classList.add('active');document.getElementById('tab-'+b.dataset.tab).classList.add('active')});
-document.getElementById('scanBtn').onclick=async()=>{await post('/api/scan',{});output.textContent='Discovery scan started. Refreshing device list…';setTimeout(refresh,2500);setTimeout(refresh,7000)};
-document.getElementById('refreshAgentBtn').onclick=async()=>{status.textContent='Refreshing agent telemetry…';await details(true);status.textContent='Agent telemetry refreshed.'};
-document.getElementById('pingBtn').onclick=async()=>{const d=selected();if(!d)return;const j=await post('/api/ping',{target:d.ip});output.textContent=j.stdout||j.stderr||'No output.'};
-document.getElementById('portsBtn').onclick=async()=>{const d=selected();if(!d)return;const j=await post('/api/ports',{target:d.ip});output.textContent=j.stdout||j.stderr||'No output.'};
-async function iperf(reverse){const d=selected();if(!d)return;const j=await post('/api/iperf',{target:d.ip,reverse});output.textContent=`Direction: ${j.direction}\nThroughput: ${rate(j.bits_per_second)}\nRetransmits: ${j.retransmits??'n/a'}\n\n${j.stdout||j.stderr||''}`;await details(false)}
-document.getElementById('iperfBtn').onclick=()=>iperf(false);document.getElementById('iperfReverseBtn').onclick=()=>iperf(true);
-document.getElementById('resultsBtn').onclick=async()=>{const d=selected(),r=await fetch(`/api/results?target=${encodeURIComponent(d?.ip||'')}`),j=await r.json();output.textContent=j.results.length?j.results.map(x=>`${x.created_at} | ${x.target_ip} | ${x.direction} | ${rate(x.bits_per_second)} | retransmits ${x.retransmits??'n/a'}`).join('\n'):'No saved iperf3 results for this device.';status.textContent='Saved results loaded.'};
-select.onchange=()=>details(false);refresh();setInterval(refresh,15000);
+  let devices = [];
+  let current = null;
+  let activeTab = 'overview';
+  let liveEnabled = true;
+  let liveTimer = null;
+  let telemetryPoints = [];
+
+  const select = document.getElementById('deviceSelect');
+  const output = document.getElementById('output');
+  const status = document.getElementById('status');
+
+  const esc = value => String(value ?? '')
+    .replaceAll('&', '&amp;')
+    .replaceAll('<', '&lt;')
+    .replaceAll('>', '&gt;')
+    .replaceAll('"', '&quot;')
+    .replaceAll("'", '&#039;');
+
+  const selected = () => devices.find(device => device.ip === select.value);
+
+  function bytes(value) {
+    value = Number(value);
+    if (!Number.isFinite(value)) return '—';
+    const units = ['B', 'KB', 'MB', 'GB', 'TB', 'PB'];
+    let index = 0;
+    while (value >= 1000 && index < units.length - 1) {
+      value /= 1000;
+      index += 1;
+    }
+    return `${value.toFixed(index >= 3 ? 1 : 0)} ${units[index]}`;
+  }
+
+  function uptime(seconds) {
+    if (seconds == null) return '—';
+    const value = Number(seconds);
+    const days = Math.floor(value / 86400);
+    const hours = Math.floor((value % 86400) / 3600);
+    const minutes = Math.floor((value % 3600) / 60);
+    return [
+      days ? `${days}d` : '',
+      hours || days ? `${hours}h` : '',
+      `${minutes}m`,
+    ].filter(Boolean).join(' ');
+  }
+
+  function rate(bitsPerSecond) {
+    return bitsPerSecond
+      ? `${(bitsPerSecond / 1e6).toFixed(1)} Mbps`
+      : 'n/a';
+  }
+
+  function severityClass(percent) {
+    const value = Number(percent) || 0;
+    return value >= 95 ? 'danger' : value >= 90 ? 'warning' : '';
+  }
+
+  function bar(percent, capacity = false) {
+    const value = Math.max(0, Math.min(100, Number(percent) || 0));
+    const track = capacity ? 'capacity-track' : 'progress-track';
+    const fill = capacity ? 'capacity-fill' : 'progress-fill';
+    return `<div class="${track}"><div class="${fill} ${severityClass(value)}" style="width:${value}%"></div></div>`;
+  }
+
+  function box(label, value) {
+    return `<div class="info-box"><small>${esc(label)}</small><strong>${esc(value || '—')}</strong></div>`;
+  }
+
+  function adapterPresentation(name) {
+    const value = String(name || '').toLowerCase();
+    if (value.includes('tailscale')) return {icon: '🔒', label: 'Tailscale'};
+    if (value.includes('proton')) return {icon: '🛡️', label: 'ProtonVPN'};
+    if (value.includes('wi-fi') || value.includes('wifi')) return {icon: '📶', label: name};
+    if (value.includes('ethernet')) return {icon: '🌐', label: name};
+    return {icon: '🔌', label: name};
+  }
+
+  function render(device, agent) {
+    document.getElementById('heroName').textContent =
+      device?.hostname || device?.ip || 'No device selected';
+
+    const os = agent?.operating_system;
+    const processor = agent?.processor;
+    const performance = agent?.performance;
+    const capabilities = agent?.agent?.capabilities || [];
+
+    document.getElementById('heroSubtitle').textContent = os
+      ? `${os.product_name}${os.display_version ? ` · ${os.display_version}` : ''}`
+      : (device?.ip || '—');
+
+    document.getElementById('heroStatus').innerHTML = device?.is_online
+      ? '<span class="good">● Online</span>'
+      : '<span class="bad">● Offline</span>';
+
+    document.getElementById('tab-overview').innerHTML = device ? `
+      <div class="hero-grid">
+        <div class="hero-box">
+          <small>Operating system</small>
+          <strong>${esc(os?.product_name || 'Agent not available')}</strong>
+          <div class="secondary">${esc(os?.display_version || '')}${os?.build ? ` · build ${esc(os.build)}` : ''}</div>
+        </div>
+        <div class="hero-box">
+          <small>Processor</small>
+          <strong>${esc(processor?.model || 'Unknown')}</strong>
+          <div class="secondary">${processor ? `${processor.physical_cores} physical · ${processor.logical_cores} logical` : ''}</div>
+        </div>
+        <div class="hero-box">
+          <small>Installed memory</small>
+          <strong>${performance ? bytes(performance.memory_total_bytes) : '—'}</strong>
+          <div class="secondary">${performance ? `${Number(performance.memory_percent || 0).toFixed(1)}% currently used` : ''}</div>
+        </div>
+      </div>
+      <div class="info-grid">
+        ${box('IP address', device.ip)}
+        ${box('Hostname', device.hostname)}
+        ${box('MAC address', device.mac)}
+        ${box('Vendor', device.vendor)}
+        ${box('Architecture', os?.architecture)}
+        ${box('Uptime', uptime(agent?.device?.uptime_seconds ?? device.uptime_seconds))}
+        ${box('Agent', device.agent_available ? `Connected · v${device.agent_version || '?'}` : 'Not detected')}
+        ${box('Python', agent?.device?.python_version)}
+        ${box('iperf3', device.iperf_available ? 'Available' : 'Not detected')}
+        ${box('Last seen', device.last_seen)}
+      </div>
+      <h3 style="margin-top:18px">Capabilities</h3>
+      <div class="capabilities">
+        ${capabilities.length
+          ? capabilities.map(item => `<span class="badge">${esc(item.replaceAll('_', ' '))}</span>`).join('')
+          : '<span class="muted">No capabilities reported.</span>'}
+      </div>
+    ` : '<div class="empty">Select a device.</div>';
+
+    const disks = agent?.disks || [];
+    document.getElementById('tab-storage').innerHTML = disks.length
+      ? disks.map(disk => {
+          const percent = Number(disk.percent) || 0;
+          const health = percent >= 95
+            ? '<span class="bad">Critical</span>'
+            : percent >= 90
+              ? '<span class="warn">Nearly full</span>'
+              : '<span class="good">Healthy</span>';
+
+          const warning = percent >= 95
+            ? `<div class="bad" style="margin-top:9px">⚠ Only ${bytes(disk.free_bytes)} remains.</div>`
+            : percent >= 90
+              ? `<div class="warn" style="margin-top:9px">Low free space: ${bytes(disk.free_bytes)} remains.</div>`
+              : '';
+
+          return `
+            <div class="disk-card">
+              <div class="row-between">
+                <strong>${esc(disk.mountpoint || disk.device)}</strong>
+                <span>${percent.toFixed(1)}% · ${health}</span>
+              </div>
+              <div class="muted" style="margin-top:5px">
+                ${esc(disk.filesystem || 'Unknown')} ·
+                ${bytes(disk.used_bytes)} used of ${bytes(disk.total_bytes)}
+              </div>
+              ${bar(percent, true)}
+              <div class="row-between" style="margin-top:8px">
+                <small>Used ${bytes(disk.used_bytes)}</small>
+                <small>Free ${bytes(disk.free_bytes)}</small>
+              </div>
+              ${warning}
+            </div>`;
+        }).join('')
+      : '<div class="empty">No storage inventory reported.</div>';
+
+    const adapters = (agent?.network_adapters || []).filter(adapter =>
+      adapter.is_up &&
+      !/loopback|default switch|wsl/i.test(adapter.name) &&
+      (adapter.addresses || []).some(address =>
+        address.family === 'IPv4' &&
+        !String(address.address).startsWith('169.254.') &&
+        address.address !== '127.0.0.1'
+      )
+    );
+
+    document.getElementById('tab-network').innerHTML = adapters.length
+      ? adapters.map(adapter => {
+          const presentation = adapterPresentation(adapter.name);
+          const ips = (adapter.addresses || [])
+            .filter(address =>
+              address.family === 'IPv4' &&
+              !String(address.address).startsWith('169.254.')
+            )
+            .map(address => esc(address.address))
+            .join(' · ');
+
+          const speed = adapter.speed_mbps && adapter.speed_mbps < 4000
+            ? `${adapter.speed_mbps} Mbps`
+            : 'Virtual adapter';
+
+          return `
+            <div class="adapter-card">
+              <div class="row-between">
+                <div class="adapter-title">
+                  <span class="adapter-icon">${presentation.icon}</span>
+                  <strong>${esc(presentation.label)}</strong>
+                </div>
+                <span class="good">Up</span>
+              </div>
+              <div style="margin-top:10px">${ips || 'No IPv4 address'}</div>
+              <div class="muted" style="margin-top:5px">${speed} · MTU ${adapter.mtu ?? '—'}</div>
+            </div>`;
+        }).join('')
+      : '<div class="empty">No active network adapters reported.</div>';
+
+    const cpu = performance?.cpu_percent ?? device?.cpu_percent;
+    const memory = performance?.memory_percent ?? device?.memory_percent;
+
+    document.getElementById('tab-performance').innerHTML = `
+      <div class="live-controls">
+        <button id="liveToggle">${liveEnabled ? 'Pause live monitoring' : 'Resume live monitoring'}</button>
+        <span class="live-indicator">
+          <span class="pulse ${liveEnabled ? '' : 'paused'}"></span>
+          ${liveEnabled ? 'Live, polling every 2 seconds' : 'Monitoring paused'}
+        </span>
+      </div>
+      <div class="progress-block">
+        <div class="progress-label"><strong>CPU utilisation</strong><span>${Number(cpu || 0).toFixed(1)}%</span></div>
+        ${bar(cpu)}
+      </div>
+      <div class="progress-block">
+        <div class="progress-label"><strong>Memory utilisation</strong><span>${Number(memory || 0).toFixed(1)}%</span></div>
+        ${bar(memory)}
+      </div>
+      <div class="info-grid">
+        ${box('Processor', processor?.model)}
+        ${box('Physical cores', processor?.physical_cores)}
+        ${box('Logical cores', processor?.logical_cores)}
+        ${box('Current frequency', processor?.frequency_current_mhz ? `${(processor.frequency_current_mhz / 1000).toFixed(2)} GHz` : '—')}
+        ${box('Installed memory', performance?.memory_total_bytes ? bytes(performance.memory_total_bytes) : '—')}
+        ${box('Available memory', performance?.memory_available_bytes ? bytes(performance.memory_available_bytes) : '—')}
+      </div>
+      <div class="chart-card" style="margin-top:14px">
+        <h3>CPU and memory history</h3>
+        <div class="chart-wrap"><canvas id="telemetryChart"></canvas></div>
+      </div>`;
+
+    document.getElementById('liveToggle')?.addEventListener('click', () => {
+      liveEnabled = !liveEnabled;
+      configureLivePolling();
+      render(current?.device || device, current?.agent || agent);
+      drawTelemetryChart();
+    });
+
+    const services = Object.entries(agent?.services || {});
+    document.getElementById('tab-services').innerHTML = services.length
+      ? services.map(([name, service]) => `
+          <div class="service-card">
+            <div class="row-between">
+              <strong>${esc(name)}</strong>
+              ${service.running
+                ? '<span class="good">Running</span>'
+                : '<span class="bad">Stopped</span>'}
+            </div>
+            <div class="muted" style="margin-top:5px">
+              ${service.port ? `TCP ${esc(service.port)}` : 'No port reported'}
+            </div>
+          </div>`).join('')
+      : '<div class="empty">No services reported.</div>';
+  }
+
+  async function loadTelemetry() {
+    const device = selected();
+    if (!device?.agent_available) {
+      telemetryPoints = [];
+      drawTelemetryChart();
+      return;
+    }
+
+    const response = await fetch(
+      `/api/telemetry/${encodeURIComponent(device.ip)}?limit=120`
+    );
+    const payload = await response.json();
+    telemetryPoints = payload.ok ? payload.points : [];
+    drawTelemetryChart();
+  }
+
+  function drawTelemetryChart() {
+    const canvas = document.getElementById('telemetryChart');
+    if (!canvas) return;
+
+    const rect = canvas.getBoundingClientRect();
+    const ratio = window.devicePixelRatio || 1;
+    canvas.width = Math.max(1, Math.floor(rect.width * ratio));
+    canvas.height = Math.max(1, Math.floor(rect.height * ratio));
+
+    const ctx = canvas.getContext('2d');
+    ctx.scale(ratio, ratio);
+
+    const width = rect.width;
+    const height = rect.height;
+    const left = 36;
+    const right = 12;
+    const top = 12;
+    const bottom = 26;
+    const plotWidth = width - left - right;
+    const plotHeight = height - top - bottom;
+
+    ctx.clearRect(0, 0, width, height);
+    ctx.font = '11px system-ui';
+    ctx.fillStyle = '#95a4c4';
+    ctx.strokeStyle = '#24324e';
+    ctx.lineWidth = 1;
+
+    [0, 25, 50, 75, 100].forEach(value => {
+      const y = top + plotHeight - (value / 100) * plotHeight;
+      ctx.beginPath();
+      ctx.moveTo(left, y);
+      ctx.lineTo(left + plotWidth, y);
+      ctx.stroke();
+      ctx.fillText(`${value}%`, 2, y + 4);
+    });
+
+    if (!telemetryPoints.length) {
+      ctx.fillText('No telemetry history yet. Leave live monitoring running for a moment.', left + 12, top + 28);
+      return;
+    }
+
+    const drawLine = (key, stroke) => {
+      ctx.strokeStyle = stroke;
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+
+      telemetryPoints.forEach((point, index) => {
+        const x = left + (
+          telemetryPoints.length === 1
+            ? plotWidth
+            : (index / (telemetryPoints.length - 1)) * plotWidth
+        );
+        const value = Math.max(0, Math.min(100, Number(point[key]) || 0));
+        const y = top + plotHeight - (value / 100) * plotHeight;
+        if (index === 0) ctx.moveTo(x, y);
+        else ctx.lineTo(x, y);
+      });
+
+      ctx.stroke();
+    };
+
+    drawLine('cpu_percent', '#6ee7b7');
+    drawLine('memory_percent', '#fbbf24');
+
+    ctx.fillStyle = '#6ee7b7';
+    ctx.fillRect(left, height - 13, 10, 3);
+    ctx.fillStyle = '#95a4c4';
+    ctx.fillText('CPU', left + 15, height - 8);
+
+    ctx.fillStyle = '#fbbf24';
+    ctx.fillRect(left + 60, height - 13, 10, 3);
+    ctx.fillStyle = '#95a4c4';
+    ctx.fillText('Memory', left + 75, height - 8);
+  }
+
+  async function history(device) {
+    const panel = document.getElementById('tab-history');
+    if (!device) {
+      panel.innerHTML = '<div class="empty">Select a device.</div>';
+      return;
+    }
+
+    const response = await fetch(
+      `/api/results?target=${encodeURIComponent(device.ip)}`
+    );
+    const payload = await response.json();
+
+    panel.innerHTML = payload.results.length
+      ? `<table>
+          <thead>
+            <tr>
+              <th>Time</th>
+              <th>Direction</th>
+              <th>Throughput</th>
+              <th>Retransmits</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${payload.results.map(result => `
+              <tr>
+                <td>${esc(result.created_at)}</td>
+                <td>${esc(result.direction)}</td>
+                <td>${esc(rate(result.bits_per_second))}</td>
+                <td>${esc(result.retransmits ?? 'n/a')}</td>
+              </tr>`).join('')}
+          </tbody>
+        </table>`
+      : '<div class="empty">No saved iperf3 results for this device.</div>';
+  }
+
+  async function details(refresh = false) {
+    const device = selected();
+    if (!device) {
+      current = null;
+      render(null, null);
+      return;
+    }
+
+    const response = await fetch(
+      `/api/device/${encodeURIComponent(device.ip)}?refresh=${refresh ? '1' : '0'}`
+    );
+    const payload = await response.json();
+
+    current = payload.ok
+      ? payload
+      : {device, agent: null};
+
+    render(current.device || device, current.agent);
+    history(current.device || device);
+    await loadTelemetry();
+
+    const resolved = current.device || device;
+    document.getElementById('refreshAgentBtn').disabled = !resolved.agent_available;
+    document.getElementById('iperfBtn').disabled = !resolved.iperf_available;
+    document.getElementById('iperfReverseBtn').disabled = !resolved.iperf_available;
+  }
+
+  function configureLivePolling() {
+    if (liveTimer) {
+      clearInterval(liveTimer);
+      liveTimer = null;
+    }
+
+    if (!liveEnabled || activeTab !== 'performance') return;
+
+    liveTimer = setInterval(async () => {
+      if (document.hidden) return;
+      const device = selected();
+      if (!device?.agent_available) return;
+
+      try {
+        await details(true);
+      } catch (error) {
+        status.textContent = `Live monitoring: ${error.message}`;
+      }
+    }, 2000);
+  }
+
+  async function refreshDevices() {
+    const response = await fetch('/api/devices');
+    const payload = await response.json();
+    const oldValue = select.value;
+
+    devices = payload.devices;
+    select.innerHTML = devices.map(device => `
+      <option value="${esc(device.ip)}">
+        ${esc(
+          (device.hostname ? `${device.hostname} · ` : '') +
+          device.ip +
+          (device.agent_available ? ' · Agent' : '') +
+          (device.iperf_available ? ' · iperf3' : '')
+        )}
+      </option>`).join('');
+
+    if (devices.some(device => device.ip === oldValue)) {
+      select.value = oldValue;
+    }
+
+    document.getElementById('onlineCount').textContent =
+      devices.filter(device => device.is_online).length;
+    document.getElementById('agentCount').textContent =
+      devices.filter(device => device.agent_available).length;
+    document.getElementById('iperfCount').textContent =
+      devices.filter(device => device.iperf_available).length;
+    document.getElementById('lastRefresh').textContent =
+      new Date().toLocaleTimeString([], {hour: '2-digit', minute: '2-digit'});
+
+    status.textContent = payload.scan.running
+      ? 'Network scan running…'
+      : (payload.scan.last_error || '');
+
+    await details(false);
+  }
+
+  async function post(url, body) {
+    status.textContent = 'Working…';
+    output.textContent = 'Running command…';
+
+    const response = await fetch(url, {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify(body || {}),
+    });
+    const payload = await response.json();
+
+    if (!response.ok) {
+      throw new Error(payload.error || 'Request failed');
+    }
+
+    status.textContent =
+      payload.message ||
+      (payload.ok ? 'Complete.' : 'Command returned an error.');
+
+    return payload;
+  }
+
+  document.querySelectorAll('.tab').forEach(button => {
+    button.addEventListener('click', () => {
+      document.querySelectorAll('.tab')
+        .forEach(tab => tab.classList.remove('active'));
+      document.querySelectorAll('.tab-panel')
+        .forEach(panel => panel.classList.remove('active'));
+
+      button.classList.add('active');
+      document.getElementById(`tab-${button.dataset.tab}`)
+        .classList.add('active');
+
+      activeTab = button.dataset.tab;
+      configureLivePolling();
+
+      if (activeTab === 'performance') {
+        loadTelemetry();
+      }
+    });
+  });
+
+  document.getElementById('scanBtn').addEventListener('click', async () => {
+    await post('/api/scan', {});
+    output.textContent =
+      'Discovery scan started. Refreshing device list…';
+    setTimeout(refreshDevices, 2500);
+    setTimeout(refreshDevices, 7000);
+  });
+
+  document.getElementById('refreshAgentBtn')
+    .addEventListener('click', async () => {
+      status.textContent = 'Refreshing agent telemetry…';
+      await details(true);
+      status.textContent = 'Agent telemetry refreshed.';
+    });
+
+  document.getElementById('pingBtn').addEventListener('click', async () => {
+    const device = selected();
+    if (!device) return;
+    const payload = await post('/api/ping', {target: device.ip});
+    output.textContent =
+      payload.stdout || payload.stderr || 'No output.';
+  });
+
+  document.getElementById('portsBtn').addEventListener('click', async () => {
+    const device = selected();
+    if (!device) return;
+    const payload = await post('/api/ports', {target: device.ip});
+    output.textContent =
+      payload.stdout || payload.stderr || 'No output.';
+  });
+
+  async function runIperf(reverse) {
+    const device = selected();
+    if (!device) return;
+
+    const payload = await post('/api/iperf', {
+      target: device.ip,
+      reverse,
+    });
+
+    output.textContent =
+      `Direction: ${payload.direction}\n` +
+      `Throughput: ${rate(payload.bits_per_second)}\n` +
+      `Retransmits: ${payload.retransmits ?? 'n/a'}\n\n` +
+      `${payload.stdout || payload.stderr || ''}`;
+
+    await details(false);
+  }
+
+  document.getElementById('iperfBtn')
+    .addEventListener('click', () => runIperf(false));
+  document.getElementById('iperfReverseBtn')
+    .addEventListener('click', () => runIperf(true));
+
+  document.getElementById('resultsBtn')
+    .addEventListener('click', async () => {
+      const device = selected();
+      const response = await fetch(
+        `/api/results?target=${encodeURIComponent(device?.ip || '')}`
+      );
+      const payload = await response.json();
+
+      output.textContent = payload.results.length
+        ? payload.results.map(result =>
+            `${result.created_at} | ${result.target_ip} | ` +
+            `${result.direction} | ${rate(result.bits_per_second)} | ` +
+            `retransmits ${result.retransmits ?? 'n/a'}`
+          ).join('\n')
+        : 'No saved iperf3 results for this device.';
+
+      status.textContent = 'Saved results loaded.';
+    });
+
+  select.addEventListener('change', async () => {
+    await details(false);
+    configureLivePolling();
+  });
+
+  window.addEventListener('resize', drawTelemetryChart);
+  document.addEventListener('visibilitychange', configureLivePolling);
+
+  refreshDevices();
+  setInterval(refreshDevices, 15000);
 </script>
 </body>
 </html>
