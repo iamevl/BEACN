@@ -1,4 +1,4 @@
-# Network Dashboard v0.6.3
+# BEACN v0.6.3
 
 ## Live Refresh Hotfix
 

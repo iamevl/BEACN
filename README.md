@@ -1,4 +1,4 @@
-# Network Dashboard v1
+# BEACN v1
 
 A small self-hosted LAN dashboard providing:
 
@@ -25,7 +25,7 @@ another authentication layer before exposing it publicly.
 
 1. Extract this folder to:
 
-   `/opt/network-dashboard`
+   `/opt/beacn`
 
 2. In that folder run:
 

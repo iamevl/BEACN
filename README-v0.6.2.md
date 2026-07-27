@@ -1,4 +1,4 @@
-# Network Dashboard v0.6.2
+# BEACN v0.6.2
 
 Stability and presentation update for the historical metrics engine.
 
@@ -11,4 +11,4 @@ Stability and presentation update for the historical metrics engine.
 - Smooths the memory history chart with a three-sample moving average.
 - Adds `PROJECT.md` with the release roadmap and known limitations.
 
-Existing telemetry data in `/data/network-dashboard.db` is preserved.
+Existing telemetry data in `/data/beacn.db` is preserved.

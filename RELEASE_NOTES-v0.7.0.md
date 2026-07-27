@@ -1,4 +1,4 @@
-# Network Dashboard v0.7.0
+# BEACN v0.7.0
 
 ## Docker Monitoring
 

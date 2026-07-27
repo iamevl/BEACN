@@ -1,4 +1,4 @@
-# Network Dashboard v0.6.1 - Hardware Polish
+# BEACN v0.6.1 - Hardware Polish
 
 This maintenance iteration improves the v0.6 Historical Metrics interface.
 

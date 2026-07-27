@@ -1,4 +1,4 @@
-# Network Dashboard v0.6.4
+# BEACN v0.6.4
 
 ## Chart & Health Polish
 

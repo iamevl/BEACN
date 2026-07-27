@@ -1,31 +1,66 @@
-data/*
-!data/.gitkeep
+console/data/*
+!console/data/.gitkeep
 
-__pycache__/
-*.pyc
-*.pyo
-*.log
-
-.env
-
-# Local upgrade backups
-.backup-v*/
-
-# Python
+# Python virtual environments and caches
+.venv/
+agent/.venv/
+**/.venv/
 __pycache__/
 *.py[cod]
 
 # Runtime data and logs
+.env
 *.log
 *.db
 *.db-shm
 *.db-wal
 
-# .NET build output
+# Build output
+build/
+dist/
 **/bin/
 **/obj/
 **/publish/
 
+# IDE files
+.vscode/
+.idea/
+
+# Local upgrade backups
+.backup-v*/
+
 # Hardware helper diagnostics
 hardware-output.json
 hardware-diagnostic.log
+
+# Windows build artifacts
+node-windows/agent/*.exe
+
+# Python packaging
+*.egg-info/
+.pytest_cache/
+.mypy_cache/
+
+# Windows
+Thumbs.db
+Desktop.ini
+
+# macOS
+.DS_Store
+
+# Python virtual environments
+.venv/
+venv/
+.build-venv/
+**/.build-venv/
+
+# Python caches
+__pycache__/
+*.py[cod]
+
+# Build output
+node-windows/agent/build/
+node-windows/agent/dist/
+
+# Runtime files
+node-windows/agent/agent.log
