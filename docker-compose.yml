@@ -12,9 +12,15 @@ services:
       IPERF_PORT: "5201"
       DATA_DIR: "/data"
       AGENT_TIMEOUT: "20"
+      METRICS_INTERVAL_SECONDS: "15"
+      TELEMETRY_RETENTION_DAYS: "30"
+      TELEMETRY_MAX_POINTS: "1000"
+      DOCKER_MONITORING_ENABLED: "true"
+      DOCKER_TIMEOUT_SECONDS: "5"
       TZ: "Europe/London"
     volumes:
       - ./data:/data
+      - /var/run/docker.sock:/var/run/docker.sock:ro
     cap_add:
       - NET_RAW
       - NET_ADMIN

@@ -1,0 +1,23 @@
+[Unit]
+Description=Network Dashboard Linux Agent
+After=network-online.target docker.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=root
+Group=root
+WorkingDirectory=/opt/network-dashboard-agent
+Environment=NETWORK_DASHBOARD_AGENT_CONFIG=/etc/network-dashboard-agent/config.json
+Environment=NETWORK_DASHBOARD_AGENT_LOG=/var/log/network-dashboard-agent.log
+ExecStart=/opt/network-dashboard-agent/venv/bin/python /opt/network-dashboard-agent/agent_service.py
+Restart=always
+RestartSec=3
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectHome=true
+ProtectSystem=full
+ReadWritePaths=/var/log /run /var/run/docker.sock
+
+[Install]
+WantedBy=multi-user.target

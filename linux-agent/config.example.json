@@ -1,0 +1,11 @@
+{
+  "agent_port": 8767,
+  "bind_address": "0.0.0.0",
+  "api_token": "",
+  "iperf_enabled": true,
+  "iperf_path": "/usr/bin/iperf3",
+  "iperf_port": 5201,
+  "restart_delay_seconds": 3,
+  "docker_enabled": true,
+  "docker_timeout_seconds": 5
+}
