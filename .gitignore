@@ -1,5 +1,5 @@
-data/*
-!data/.gitkeep
+console/data/*
+!console/data/.gitkeep
 
 # Python virtual environments and caches
 .venv/
@@ -32,3 +32,18 @@ dist/
 # Hardware helper diagnostics
 hardware-output.json
 hardware-diagnostic.log
+
+# Windows build artifacts
+node-windows/agent/*.exe
+
+# Python packaging
+*.egg-info/
+.pytest_cache/
+.mypy_cache/
+
+# Windows
+Thumbs.db
+Desktop.ini
+
+# macOS
+.DS_Store
