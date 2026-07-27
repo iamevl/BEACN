@@ -676,11 +676,6 @@ def docker_container_summary(container):
     config = attrs.get("Config") or {}
 
     stats = {}
-    if state.get("Running"):
-        try:
-            stats = container.stats(stream=False)
-        except DockerException:
-            stats = {}
 
     memory_used, memory_limit, memory_percent = docker_memory(stats)
     network_rx, network_tx = docker_network_totals(stats)

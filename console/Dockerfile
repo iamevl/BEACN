@@ -10,13 +10,14 @@ RUN apt-get update \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
-COPY requirements.txt .
+
+COPY console/requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-COPY app.py .
+COPY console/app.py .
 COPY version.py .
-COPY templates ./templates
-COPY static ./static
+COPY console/templates ./templates
+COPY console/static ./static
 
 ENV PYTHONUNBUFFERED=1
 EXPOSE 8766

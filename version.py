@@ -1,3 +1,3 @@
 APP_NAME = "BEACN"
-APP_VERSION = "0.7.1"
-APP_STAGE = "Linux Agent"
+APP_VERSION = "0.9.2"
+APP_STAGE = "Console"
