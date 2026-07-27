@@ -1,4 +1,4 @@
-# Network Dashboard v0.7.1
+# BEACN v0.7.1
 
 ## Linux Agent and Device-Aware Docker Monitoring
 

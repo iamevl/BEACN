@@ -1,4 +1,4 @@
-# Network Dashboard v0.6.7
+# BEACN v0.6.7
 
 ## Static Assets Hotfix
 

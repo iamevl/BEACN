@@ -1,4 +1,4 @@
-# Network Dashboard v0.6.5
+# BEACN v0.6.5
 
 ## Tooltip Time Hotfix
 

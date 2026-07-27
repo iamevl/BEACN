@@ -1,0 +1,23 @@
+[Unit]
+Description=BEACN Linux Agent
+After=network-online.target docker.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=root
+Group=root
+WorkingDirectory=/opt/beacn-agent
+Environment=NETWORK_DASHBOARD_AGENT_CONFIG=/etc/beacn-agent/config.json
+Environment=NETWORK_DASHBOARD_AGENT_LOG=/var/log/beacn-agent.log
+ExecStart=/opt/beacn-agent/venv/bin/python /opt/beacn-agent/agent_service.py
+Restart=always
+RestartSec=3
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectHome=true
+ProtectSystem=full
+ReadWritePaths=/var/log /run /var/run/docker.sock
+
+[Install]
+WantedBy=multi-user.target

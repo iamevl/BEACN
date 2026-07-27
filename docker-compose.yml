@@ -1,9 +1,9 @@
 services:
-  network-dashboard:
+  beacn:
     build:
       context: .
-    image: local/network-dashboard:1.0
-    container_name: network-dashboard
+    image: local/beacn:1.0
+    container_name: beacn
     restart: unless-stopped
     network_mode: host
     environment:

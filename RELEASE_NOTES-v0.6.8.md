@@ -1,4 +1,4 @@
-# Network Dashboard v0.6.8
+# BEACN v0.6.8
 
 ## JavaScript Modules
 

@@ -6,10 +6,10 @@ if [[ ${EUID} -ne 0 ]]; then
   exit 1
 fi
 
-systemctl disable --now network-dashboard-agent.service 2>/dev/null || true
-rm -f /etc/systemd/system/network-dashboard-agent.service
+systemctl disable --now beacn-agent.service 2>/dev/null || true
+rm -f /etc/systemd/system/beacn-agent.service
 systemctl daemon-reload
-rm -rf /opt/network-dashboard-agent
+rm -rf /opt/beacn-agent
 
 echo "Agent removed."
-echo "Configuration was retained at /etc/network-dashboard-agent/config.json"
+echo "Configuration was retained at /etc/beacn-agent/config.json"

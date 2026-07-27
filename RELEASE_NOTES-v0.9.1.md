@@ -1,7 +1,7 @@
 # v0.9.1 Windows Agent Core Refactor
 
 - Removes the pywin32 service implementation.
-- Introduces the `network_dashboard_agent` package.
+- Introduces the `beacn_agent` package.
 - Separates configuration, state, collectors, runtime supervision and HTTP API.
 - Adds `/info` for agent diagnostics and future update compatibility.
 - Retains `/`, `/status`, `/hardware` and `/health` behaviour from the supplied source.

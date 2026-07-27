@@ -1,4 +1,4 @@
-# Network Dashboard Windows Agent v0.5
+# BEACN Windows Agent v0.5
 
 Adds LibreHardwareMonitor-based hardware telemetry without requiring the
 LibreHardwareMonitor desktop application.

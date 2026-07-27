@@ -1,4 +1,4 @@
-# Network Dashboard v0.6.6
+# BEACN v0.6.6
 
 ## Frontend Foundation
 

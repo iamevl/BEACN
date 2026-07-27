@@ -1,30 +1,33 @@
 data/*
 !data/.gitkeep
 
-__pycache__/
-*.pyc
-*.pyo
-*.log
-
-.env
-
-# Local upgrade backups
-.backup-v*/
-
-# Python
+# Python virtual environments and caches
+.venv/
+agent/.venv/
+**/.venv/
 __pycache__/
 *.py[cod]
 
 # Runtime data and logs
+.env
 *.log
 *.db
 *.db-shm
 *.db-wal
 
-# .NET build output
+# Build output
+build/
+dist/
 **/bin/
 **/obj/
 **/publish/
+
+# IDE files
+.vscode/
+.idea/
+
+# Local upgrade backups
+.backup-v*/
 
 # Hardware helper diagnostics
 hardware-output.json

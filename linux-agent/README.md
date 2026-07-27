@@ -1,4 +1,4 @@
-# Network Dashboard Linux Agent v0.7.1
+# BEACN Linux Agent v0.7.1
 
 Initial target platforms:
 
@@ -25,14 +25,14 @@ sudo ./install.sh
 ## Verify
 
 ```bash
-systemctl status network-dashboard-agent --no-pager
+systemctl status beacn-agent --no-pager
 curl http://127.0.0.1:8767/health
 curl http://127.0.0.1:8767/docker
 ```
 
 ## Configuration
 
-`/etc/network-dashboard-agent/config.json`
+`/etc/beacn-agent/config.json`
 
 The initial release runs as root so it can read the local Docker socket. The API
 is intended for trusted LANs. Set `api_token` before exposing it beyond the LAN.

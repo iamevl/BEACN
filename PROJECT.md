@@ -1,4 +1,4 @@
-# Network Dashboard Project
+# BEACN Project
 
 ## Released
 
@@ -79,7 +79,7 @@
 
 
 ## v0.7.1
-- Added the first Network Dashboard Linux Agent.
+- Added the first BEACN Linux Agent.
 - Added Debian, Ubuntu and Raspberry Pi OS systemd installer.
 - Made Docker monitoring follow the selected agent-enabled device.
 - Established the cross-platform agent contract: `/status`, `/hardware`,

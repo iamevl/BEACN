@@ -1,11 +1,11 @@
 {
   "agent_port": 8767,
   "bind_address": "0.0.0.0",
-  "iperf_path": "C:\\Program Files\\NetworkDashboardAgent\\iperf3.exe",
+  "iperf_path": "iperf3.exe",
   "iperf_port": 5201,
   "api_token": "",
   "restart_delay_seconds": 3,
-  "hardware_helper_path": "C:\\Program Files\\NetworkDashboardAgent\\hardware-helper.exe",
+  "hardware_helper_path": "hardware-helper.exe",
   "hardware_helper_timeout_seconds": 8,
   "hardware_cache_seconds": 30
 }

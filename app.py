@@ -25,7 +25,7 @@ except ImportError:
 try:
     from version import APP_NAME, APP_STAGE, APP_VERSION
 except ImportError:
-    APP_NAME = "Network Dashboard"
+    APP_NAME = "BEACN"
     APP_VERSION = "0.4.0"
     APP_STAGE = "Live Monitoring"
 
@@ -37,7 +37,7 @@ AGENT_TIMEOUT = float(os.getenv("AGENT_TIMEOUT", "1.5"))
 SCAN_TIMEOUT = int(os.getenv("SCAN_TIMEOUT", "90"))
 COMMAND_TIMEOUT = int(os.getenv("COMMAND_TIMEOUT", "20"))
 DATA_DIR = Path(os.getenv("DATA_DIR", "/data"))
-DB_PATH = DATA_DIR / "network-dashboard.db"
+DB_PATH = DATA_DIR / "beacn.db"
 TELEMETRY_RETENTION_DAYS = int(os.getenv("TELEMETRY_RETENTION_DAYS", "30"))
 TELEMETRY_MAX_POINTS = int(os.getenv("TELEMETRY_MAX_POINTS", "1000"))
 METRICS_INTERVAL_SECONDS = max(5, int(os.getenv("METRICS_INTERVAL_SECONDS", "15")))
@@ -928,7 +928,7 @@ def docker_for_device(target):
 
     if not row["agent_available"]:
         return jsonify(unavailable_docker_payload(
-            "The selected device does not have a Network Dashboard Agent."
+            "The selected device does not have a BEACN Agent."
         ))
 
     payload = fetch_agent_json(target, "/docker")

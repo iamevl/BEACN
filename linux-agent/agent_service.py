@@ -22,9 +22,9 @@ except ImportError:
 
 
 VERSION = "0.7.1"
-DEFAULT_CONFIG_PATH = Path("/etc/network-dashboard-agent/config.json")
+DEFAULT_CONFIG_PATH = Path("/etc/beacn-agent/config.json")
 CONFIG_PATH = Path(os.getenv("NETWORK_DASHBOARD_AGENT_CONFIG", str(DEFAULT_CONFIG_PATH)))
-LOG_PATH = Path(os.getenv("NETWORK_DASHBOARD_AGENT_LOG", "/var/log/network-dashboard-agent.log"))
+LOG_PATH = Path(os.getenv("NETWORK_DASHBOARD_AGENT_LOG", "/var/log/beacn-agent.log"))
 
 
 def utc_now():
@@ -503,7 +503,7 @@ def status_payload():
 
     return {
         "agent": {
-            "name": "Network Dashboard Linux Agent",
+            "name": "BEACN Linux Agent",
             "version": VERSION,
             "started_at": datetime.fromtimestamp(
                 STATE.started_at, timezone.utc
@@ -614,7 +614,7 @@ def serve():
 
 
 def main():
-    log(f"Starting Network Dashboard Linux Agent {VERSION}")
+    log(f"Starting BEACN Linux Agent {VERSION}")
     supervisor = threading.Thread(target=supervise_iperf, daemon=True)
     supervisor.start()
 
