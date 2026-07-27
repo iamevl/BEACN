@@ -47,3 +47,20 @@ Desktop.ini
 
 # macOS
 .DS_Store
+
+# Python virtual environments
+.venv/
+venv/
+.build-venv/
+**/.build-venv/
+
+# Python caches
+__pycache__/
+*.py[cod]
+
+# Build output
+node-windows/agent/build/
+node-windows/agent/dist/
+
+# Runtime files
+node-windows/agent/agent.log
