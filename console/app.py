@@ -11,8 +11,12 @@ import urllib.request
 from contextlib import nullcontext
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
+from uuid import uuid4
 
 from flask import Flask, jsonify, render_template, request
+
+from beacn.database import Database, initialise_schema
+from beacn.inventory import DeviceRepository
 
 try:
     import docker
@@ -54,104 +58,19 @@ def utc_now():
     return datetime.now(timezone.utc).isoformat(timespec="seconds")
 
 
+database = Database(DB_PATH)
+repository = DeviceRepository(database)
+
+
 def db():
-    DATA_DIR.mkdir(parents=True, exist_ok=True)
-    conn = sqlite3.connect(DB_PATH, timeout=30)
-    conn.row_factory = sqlite3.Row
-    conn.execute("PRAGMA busy_timeout = 30000")
-    conn.execute("PRAGMA foreign_keys = ON")
-    return conn
+    """Compatibility connection helper for legacy routes during v0.10."""
+    return database.connect()
 
 
 def init_db():
     with db_write_lock:
         with db() as conn:
-            conn.execute("PRAGMA journal_mode = WAL")
-            conn.execute("PRAGMA synchronous = NORMAL")
-            conn.executescript("""
-            CREATE TABLE IF NOT EXISTS devices (
-                ip TEXT PRIMARY KEY,
-                hostname TEXT,
-                mac TEXT,
-                vendor TEXT,
-                is_online INTEGER NOT NULL DEFAULT 0,
-                iperf_available INTEGER NOT NULL DEFAULT 0,
-                first_seen TEXT NOT NULL,
-                last_seen TEXT NOT NULL
-            );
-
-            CREATE TABLE IF NOT EXISTS iperf_results (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                target_ip TEXT NOT NULL,
-                direction TEXT NOT NULL,
-                bits_per_second REAL,
-                retransmits INTEGER,
-                raw_output TEXT NOT NULL,
-                created_at TEXT NOT NULL
-            );
-
-            CREATE TABLE IF NOT EXISTS telemetry_history (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                target_ip TEXT NOT NULL,
-                cpu_percent REAL,
-                memory_percent REAL,
-                memory_available_bytes INTEGER,
-                uptime_seconds INTEGER,
-                cpu_temperature_c REAL,
-                cpu_power_w REAL,
-                cpu_clock_mhz REAL,
-                gpu_load_percent REAL,
-                gpu_temperature_c REAL,
-                gpu_power_w REAL,
-                created_at TEXT NOT NULL
-            );
-
-            CREATE INDEX IF NOT EXISTS idx_telemetry_target_created
-            ON telemetry_history(target_ip, created_at);
-
-            CREATE INDEX IF NOT EXISTS idx_iperf_target_created
-            ON iperf_results(target_ip, created_at);
-            """)
-
-            existing_columns = {
-                row["name"]
-                for row in conn.execute("PRAGMA table_info(devices)").fetchall()
-            }
-
-            migrations = {
-                "agent_available": "INTEGER NOT NULL DEFAULT 0",
-                "agent_version": "TEXT",
-                "agent_hostname": "TEXT",
-                "cpu_percent": "REAL",
-                "memory_percent": "REAL",
-                "uptime_seconds": "INTEGER",
-                "agent_last_seen": "TEXT",
-                "agent_payload": "TEXT",
-            }
-
-            for column, definition in migrations.items():
-                if column not in existing_columns:
-                    conn.execute(
-                        f"ALTER TABLE devices ADD COLUMN {column} {definition}"
-                    )
-
-            telemetry_columns = {
-                row["name"]
-                for row in conn.execute("PRAGMA table_info(telemetry_history)").fetchall()
-            }
-            telemetry_migrations = {
-                "cpu_temperature_c": "REAL",
-                "cpu_power_w": "REAL",
-                "cpu_clock_mhz": "REAL",
-                "gpu_load_percent": "REAL",
-                "gpu_temperature_c": "REAL",
-                "gpu_power_w": "REAL",
-            }
-            for column, definition in telemetry_migrations.items():
-                if column not in telemetry_columns:
-                    conn.execute(
-                        f"ALTER TABLE telemetry_history ADD COLUMN {column} {definition}"
-                    )
+            initialise_schema(conn)
 
 def valid_target(value):
     try:
@@ -478,21 +397,22 @@ def scan_network():
 
                     hostname = agent_hostname or discovered_hostname or ip
                     existing = conn.execute(
-                        "SELECT first_seen FROM devices WHERE ip = ?",
+                        "SELECT id, first_seen FROM devices WHERE ip = ?",
                         (ip,),
                     ).fetchone()
+                    device_id = existing["id"] if existing and existing["id"] else str(uuid4())
                     first_seen = existing["first_seen"] if existing else now
 
                     conn.execute("""
                         INSERT INTO devices (
-                            ip, hostname, mac, vendor, is_online,
+                            id, ip, hostname, mac, vendor, is_online,
                             iperf_available, first_seen, last_seen,
                             agent_available, agent_version, agent_hostname,
                             cpu_percent, memory_percent, uptime_seconds,
                             agent_last_seen, agent_payload
                         )
                         VALUES (
-                            ?, ?, ?, ?, 1, ?, ?, ?,
+                            ?, ?, ?, ?, ?, 1, ?, ?, ?,
                             ?, ?, ?, ?, ?, ?, ?, ?
                         )
                         ON CONFLICT(ip) DO UPDATE SET
@@ -545,6 +465,7 @@ def scan_network():
                                 ELSE devices.agent_payload
                             END
                     """, (
+                        device_id,
                         ip,
                         hostname,
                         device["mac"],
@@ -770,22 +691,49 @@ def index():
 
 @app.get("/api/devices")
 def devices():
+    """Return canonical Device objects while preserving legacy UI fields."""
+    canonical = {device.primary_ip: device for device in repository.list()}
+
     with db() as conn:
         rows = conn.execute("""
             SELECT
-                ip, hostname, mac, vendor, is_online,
+                id, ip, hostname, display_name, mac, vendor, is_online,
                 iperf_available, first_seen, last_seen,
                 agent_available, agent_version, agent_hostname,
                 cpu_percent, memory_percent, uptime_seconds,
-                agent_last_seen
+                agent_last_seen, os_name, os_version, device_type
             FROM devices
             ORDER BY is_online DESC, ip
         """).fetchall()
 
+    payload = []
+    for row in rows:
+        item = dict(row)
+        device = canonical.get(row["ip"])
+        if device:
+            item["device_id"] = device.id
+            item["primary_ip"] = device.primary_ip
+            item["primary_mac"] = device.primary_mac
+            item["agent_installed"] = device.agent_installed
+        payload.append(item)
+
     return jsonify({
-        "devices": [dict(row) for row in rows],
+        "devices": payload,
         "scan": scan_state,
         "subnet": NETWORK_SUBNET,
+    })
+
+
+@app.get("/api/devices/<device_id>")
+def canonical_device_details(device_id):
+    device = repository.get(device_id)
+    if not device:
+        return jsonify({"ok": False, "error": "Device not found."}), 404
+
+    return jsonify({
+        "ok": True,
+        "device": device.to_dict(),
+        "observations": list(repository.observations(device.id, limit=100)),
     })
 
 

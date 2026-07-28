@@ -1,0 +1,1 @@
+"""BEACN shared application package."""

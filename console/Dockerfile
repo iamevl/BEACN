@@ -15,6 +15,7 @@ COPY console/requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
 COPY console/app.py .
+COPY console/beacn ./beacn
 COPY version.py .
 COPY console/templates ./templates
 COPY console/static ./static
