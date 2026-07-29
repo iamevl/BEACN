@@ -960,8 +960,10 @@ def ping():
             "error": "Target is outside the configured subnet.",
         }), 400
 
+    safe_target = normalize_target(target)
+
     return jsonify(run_command(
-        ["ping", "-c", "4", "-W", "2", target],
+        ["ping", "-c", "4", "-W", "2", safe_target],
         timeout=12,
     ))
 
