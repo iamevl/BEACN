@@ -74,4 +74,14 @@ Avoid shortcuts that create technical debt.
 
 ---
 
+## 8. Respect the Open Source Ecosystem
+
+BEACN is built upon the work of many outstanding open source projects.
+
+Where external software, libraries or tools are used, they should be clearly acknowledged and their original projects referenced.
+
+Whenever possible, improvements should be contributed back to the upstream project rather than permanently maintained as local forks.
+
+---
+
 Every release should leave BEACN simpler, more consistent, and easier to extend than the release before it.
