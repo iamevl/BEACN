@@ -84,4 +84,10 @@ Whenever possible, improvements should be contributed back to the upstream proje
 
 ---
 
+## 9. Use product names consistently.
+
+Documentation, code comments and user-facing messages should refer to BEACN components by their canonical names. Consistent terminology improves usability, reduces ambiguity and makes the platform easier to understand.
+
+---
+
 Every release should leave BEACN simpler, more consistent, and easier to extend than the release before it.
