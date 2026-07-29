@@ -6,6 +6,14 @@ These principles guide architectural and engineering decisions throughout the BE
 
 ---
 
+## Principle 0 – Simplicity First
+
+Every design decision should make BEACN easier to understand, easier to deploy and easier to operate.
+
+If two solutions solve the same problem, prefer the simpler one.
+
+---
+
 ## 1. Device First
 
 A device is the core entity within BEACN.
