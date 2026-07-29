@@ -1,0 +1,13 @@
+:root {
+  --beacn-background: #0F172A;
+  --beacn-surface: #18233F;
+  --beacn-border: #2A3C63;
+  --beacn-primary-text: #F8FAFC;
+  --beacn-secondary-text: #A7B8D9;
+  --beacn-accent: #67E8C8;
+  --beacn-success: #22C55E;
+  --beacn-warning: #FBBF24;
+  --beacn-error: #EF4444;
+  --beacn-info: #60A5FA;
+  --beacn-font-sans: Inter, "Segoe UI", Arial, sans-serif;
+}
