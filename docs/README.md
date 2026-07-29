@@ -24,3 +24,9 @@ Historical README files are retained in:
 - [Archived README files](archive/readmes/)
 
 These files are preserved for project history but are no longer considered current documentation.
+
+## Acknowledgements
+
+BEACN proudly builds upon many excellent open source projects.
+
+See [docs/acknowledgements.md](docs/acknowledgements.md) for a full list of the projects and communities that make BEACN possible.
