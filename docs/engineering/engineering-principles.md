@@ -66,7 +66,7 @@ Avoid duplicate models, duplicated configuration and duplicated business logic.
 
 ---
 
-## 8. Build for Tomorrow
+## 7. Build for Tomorrow
 
 Every feature should make future features easier.
 
