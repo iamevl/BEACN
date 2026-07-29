@@ -46,25 +46,34 @@
 
 <body>
   <main>
-    <header class="app-header">
-      <div class="brand-block">
-        <img
-          class="brand-wordmark"
-          src="{{ url_for('static', filename='branding/logos/beacn-secondary-logo-dark.svg') }}"
-          alt="BEACN"
-        >
+<header class="app-header">
+  <div class="brand-block">
+    <img
+      class="brand-wordmark"
+      src="{{ url_for('static', filename='branding/logos/beacn-secondary-logo-dark.svg') }}"
+      alt="BEACN"
+    >
 
-        <p>
-          Discovery, diagnostics and live device intelligence for
-          {{ subnet }}.
-        </p>
-      </div>
+    <div class="scope-row">
+      <span class="brand-subtitle">
+        Infrastructure discovery, diagnostics and live device intelligence
+      </span>
 
-      <div class="release-badges">
-        <span class="badge">v{{ app_version }}</span>
-        <span class="badge">{{ app_stage }}</span>
-      </div>
-    </header>
+      <label class="scope-selector">
+        <span class="scope-label">Scope</span>
+
+        <select id="scopeSelect" aria-label="Monitored network scope">
+          <option value="{{ subnet }}">{{ subnet }}</option>
+        </select>
+      </label>
+    </div>
+  </div>
+
+  <div class="release-badges">
+    <span class="badge">v{{ app_version }}</span>
+    <span class="badge">{{ app_stage }}</span>
+  </div>
+</header>
 
     <section class="grid metrics">
       <div class="card metric">
