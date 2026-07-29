@@ -58,17 +58,7 @@ The repository is the source of truth.
 
 ---
 
-## 6. Simplicity Wins
-
-Choose the simplest design that solves the problem.
-
-Avoid unnecessary abstraction.
-
-Avoid premature optimisation.
-
----
-
-## 7. One Source of Truth
+## 6. One Source of Truth
 
 Information should exist in one place.
 
