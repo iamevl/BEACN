@@ -1,7 +1,6 @@
 version: 2
 
 updates:
-  # Python dependencies, such as requirements.txt
   - package-ecosystem: "pip"
     directory: "/"
     schedule:
@@ -12,9 +11,11 @@ updates:
     open-pull-requests-limit: 5
     labels:
       - "dependencies"
-      - "python"
+    groups:
+      python-dependencies:
+        patterns:
+          - "*"
 
-  # Docker base images referenced by Dockerfiles
   - package-ecosystem: "docker"
     directory: "/"
     schedule:
@@ -25,9 +26,7 @@ updates:
     open-pull-requests-limit: 5
     labels:
       - "dependencies"
-      - "docker"
 
-  # Actions used within .github/workflows
   - package-ecosystem: "github-actions"
     directory: "/"
     schedule:
@@ -38,4 +37,3 @@ updates:
     open-pull-requests-limit: 5
     labels:
       - "dependencies"
-      - "github-actions"
