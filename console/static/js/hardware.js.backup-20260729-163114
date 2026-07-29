@@ -144,7 +144,8 @@
       ? `${os.product_name}${os.display_version ? ` · ${os.display_version}` : ''}`
       : (device?.ip || '—');
 
-renderComponentStatus(device, agent);
+document.getElementById('heroStatus').innerHTML =
+  renderComponentStatus(device, agent);
 
     document.getElementById('tab-overview').innerHTML = device ? `
       <div class="hero-grid">

@@ -73,11 +73,6 @@ def init_db():
             initialise_schema(conn)
 
 
-
-def normalize_target(value):
-    return str(ipaddress.ip_address(value))
-
-
 def valid_target(value):
     try:
         ip = ipaddress.ip_address(value)
@@ -142,50 +137,9 @@ def _is_valid_nmap_args(args):
 
 
 
-def _is_valid_iperf_args(args):
-    if not isinstance(args, list):
-        return False
-
-    # Forward:
-    # iperf3 -c <target> -p 5201 -J -t 10
-    if (
-        len(args) == 8
-        and args[0] == "iperf3"
-        and args[1] == "-c"
-        and isinstance(args[2], str)
-        and valid_target(args[2])
-        and args[3] == "-p"
-        and args[4] == str(IPERF_PORT)
-        and args[5] == "-J"
-        and args[6] == "-t"
-        and args[7] == "10"
-    ):
-        return True
-
-    # Reverse:
-    # iperf3 -c <target> -p 5201 -J -t 10 -R
-    if (
-        len(args) == 9
-        and args[0] == "iperf3"
-        and args[1] == "-c"
-        and isinstance(args[2], str)
-        and valid_target(args[2])
-        and args[3] == "-p"
-        and args[4] == str(IPERF_PORT)
-        and args[5] == "-J"
-        and args[6] == "-t"
-        and args[7] == "10"
-        and args[8] == "-R"
-    ):
-        return True
-
-    return False
-
-
 COMMAND_VALIDATORS = {
     "ping": _is_valid_ping_args,
     "nmap": _is_valid_nmap_args,
-    "iperf3": _is_valid_iperf_args,
 }
 
 
