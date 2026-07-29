@@ -78,7 +78,7 @@
       grid-template-columns: minmax(300px, .78fr) minmax(500px, 1.5fr);
     }
     .card {
-      background: rgba(18, 26, 45, .94);
+       background: color-mix(in srgb, var(--panel) 94%, transparent);
       border: 1px solid var(--border);
       border-radius: 16px;
       padding: 18px;
@@ -227,9 +227,20 @@
     .hardware-metric small { display: block; margin-bottom: 7px; }
     .hardware-metric strong { display: block; font-size: 25px; line-height: 1.15; }
     .hardware-metric .secondary { margin-top: 7px; color: var(--muted); font-size: 12px; }
-    .hardware-metric.good-state, .sensor-card.good-state { border-color: rgba(110,231,183,.45); }
-    .hardware-metric.warn-state, .sensor-card.warn-state { border-color: rgba(251,191,36,.65); }
-    .hardware-metric.bad-state, .sensor-card.bad-state { border-color: rgba(251,113,133,.75); }
+.hardware-metric.good-state,
+.sensor-card.good-state {
+  border-color: rgba(34, 197, 94, .45);
+}
+
+.hardware-metric.warn-state,
+.sensor-card.warn-state {
+  border-color: rgba(251, 191, 36, .65);
+}
+
+.hardware-metric.bad-state,
+.sensor-card.bad-state {
+  border-color: rgba(239, 68, 68, .75);
+}
     .sensor-group { margin-top: 20px; }
     .sensor-grid {
       display: grid;
