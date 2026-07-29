@@ -1,6 +1,6 @@
 # BEACN (Pronounced Beacon)
 
-> Modern, lightweight infrastructure monitoring for homelabs, small businesses and edge deployments.
+> BEACN is an open source infrastructure discovery, inventory and observability platform.
 
 ![Version](https://img.shields.io/badge/version-0.9.3-blue)
 ![Platform](https://img.shields.io/badge/platform-Windows%20%7C%20Linux-green)
