@@ -12,10 +12,15 @@
 ## Overview
 
 BEACN is a lightweight monitoring platform designed to provide fast visibility into servers, workstations, virtual machines and Docker hosts without requiring a heavyweight monitoring stack.
----
-This project is **not affiliated with, endorsed by, or associated with BEACN (the audio hardware company)** or any other organisation using the BEACN name.
 
-If you're looking for professional, broadcast audio products such as microphones, audio interfaces or streaming hardware, please visit their official website: [Beacn.com](https://www.beacn.com) they produce some excellent products.
+---
+> [!NOTE]
+> Looking for professional, broadcast audio products such as microphones, mixers or streaming hardware? Please visit BEACN Audio. They produce some excellent products.
+>
+> This repository is **not affiliated with BEACN Audio**.
+>
+> Their official website is:
+> https://www.beacn.com
 
 ---
 Unlike enterprise monitoring suites that require databases, collectors and complex configuration, BEACN is designed to deploy in minutes while remaining extensible enough to grow into a full monitoring platform.
