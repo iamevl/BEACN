@@ -3,87 +3,165 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
+
   <title>{{ app_name }}</title>
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/app.css') }}?v={{ app_version }}">
+
+  <meta
+    name="theme-color"
+    content="#0F172A"
+  >
+
+  <link
+    rel="icon"
+    href="{{ url_for('static', filename='branding/favicons/favicon.ico') }}"
+    sizes="any"
+  >
+
+  <link
+    rel="icon"
+    type="image/svg+xml"
+    href="{{ url_for('static', filename='branding/logos/beacn-primary-mark.svg') }}"
+  >
+
+  <link
+    rel="apple-touch-icon"
+    href="{{ url_for('static', filename='branding/favicons/favicon-180x180.png') }}"
+  >
+
+  <link
+    rel="manifest"
+    href="{{ url_for('static', filename='branding/site.webmanifest') }}"
+  >
+
+  <link
+    rel="stylesheet"
+    href="{{ url_for('static', filename='branding/css/beacn-tokens.css') }}?v={{ app_version }}"
+  >
+
+  <link
+    rel="stylesheet"
+    href="{{ url_for('static', filename='css/app.css') }}?v={{ app_version }}"
+  >
 </head>
+
 <body>
-<main>
-  <div class="title-row">
-    <div>
-      <h1>{{ app_name }}</h1>
-      <p>Discovery, diagnostics and live device intelligence for {{ subnet }}.</p>
-    </div>
-    <span class="badge">v{{ app_version }}</span>
-    <span class="badge">{{ app_stage }}</span>
-  </div>
+  <main>
+    <header class="app-header">
+      <div class="brand-block">
+        <img
+          class="brand-wordmark"
+          src="{{ url_for('static', filename='branding/logos/beacn-secondary-logo-dark.svg') }}"
+          alt="BEACN"
+        >
 
-  <section class="grid metrics">
-    <div class="card metric"><small>Online devices</small><strong id="onlineCount">0</strong></div>
-    <div class="card metric"><small>Agent devices</small><strong id="agentCount">0</strong></div>
-    <div class="card metric"><small>iperf3 servers</small><strong id="iperfCount">0</strong></div>
-    <div class="card metric"><small>Docker containers</small><strong id="dockerCount">—</strong></div>
-    <div class="card metric"><small>Last refresh</small><strong id="lastRefresh">Never</strong></div>
-  </section>
-
-  <section class="grid two">
-    <div class="card">
-      <h2>Device tools</h2>
-      <label for="deviceSelect">Discovered device</label>
-      <select id="deviceSelect"></select>
-
-      <div class="buttons">
-        <button id="scanBtn" class="primary">Rescan network</button>
-        <button id="refreshAgentBtn">Refresh agent</button>
-        <button id="pingBtn">Ping</button>
-        <button id="portsBtn">Scan top 100 ports</button>
-        <button id="iperfBtn">Run iperf3</button>
-        <button id="iperfReverseBtn">Run reverse iperf3</button>
-        <button id="resultsBtn">Show saved results</button>
+        <p>
+          Discovery, diagnostics and live device intelligence for
+          {{ subnet }}.
+        </p>
       </div>
-      <div id="status" class="status"></div>
-    </div>
 
-    <div class="card">
-      <div class="device-hero">
-        <div>
-          <h2 id="heroName">No device selected</h2>
-          <div id="heroSubtitle" class="muted">—</div>
+      <div class="release-badges">
+        <span class="badge">v{{ app_version }}</span>
+        <span class="badge">{{ app_stage }}</span>
+      </div>
+    </header>
+
+    <section class="grid metrics">
+      <div class="card metric">
+        <small>Online devices</small>
+        <strong id="onlineCount">0</strong>
+      </div>
+
+      <div class="card metric">
+        <small>Agent devices</small>
+        <strong id="agentCount">0</strong>
+      </div>
+
+      <div class="card metric">
+        <small>iperf3 servers</small>
+        <strong id="iperfCount">0</strong>
+      </div>
+
+      <div class="card metric">
+        <small>Docker containers</small>
+        <strong id="dockerCount">—</strong>
+      </div>
+
+      <div class="card metric">
+        <small>Last refresh</small>
+        <strong id="lastRefresh">Never</strong>
+      </div>
+    </section>
+
+    <section class="grid two">
+      <div class="card">
+        <h2>Device tools</h2>
+
+        <label for="deviceSelect">Discovered device</label>
+        <select id="deviceSelect"></select>
+
+        <div class="buttons">
+          <button id="scanBtn" class="primary">Rescan network</button>
+          <button id="refreshAgentBtn">Refresh agent</button>
+          <button id="pingBtn">Ping</button>
+          <button id="portsBtn">Scan top 100 ports</button>
+          <button id="iperfBtn">Run iperf3</button>
+          <button id="iperfReverseBtn">Run reverse iperf3</button>
+          <button id="resultsBtn">Show saved results</button>
         </div>
-        <div id="heroStatus" class="badge">Unknown</div>
+
+        <div id="status" class="status"></div>
       </div>
 
-      <div class="tabs">
-        <button class="tab active" data-tab="overview">Overview</button>
-        <button class="tab" data-tab="storage">Storage</button>
-        <button class="tab" data-tab="network">Network</button>
-        <button class="tab" data-tab="performance">Performance</button>
-        <button class="tab" data-tab="hardware">Hardware</button>
-        <button class="tab" data-tab="services">Services</button>
-        <button class="tab" data-tab="docker">Docker</button>
-        <button class="tab" data-tab="history">History</button>
+      <div class="card">
+        <div class="device-hero">
+          <div>
+            <h2 id="heroName">No device selected</h2>
+            <div id="heroSubtitle" class="muted">—</div>
+          </div>
+
+          <div id="heroStatus" class="badge component-status">
+            Unknown
+          </div>
+        </div>
+
+        <div class="tabs">
+          <button class="tab active" data-tab="overview">Overview</button>
+          <button class="tab" data-tab="storage">Storage</button>
+          <button class="tab" data-tab="network">Network</button>
+          <button class="tab" data-tab="performance">Performance</button>
+          <button class="tab" data-tab="hardware">Hardware</button>
+          <button class="tab" data-tab="services">Services</button>
+          <button class="tab" data-tab="docker">Docker</button>
+          <button class="tab" data-tab="history">History</button>
+        </div>
+
+        <section id="tab-overview" class="tab-panel active"></section>
+        <section id="tab-storage" class="tab-panel"></section>
+        <section id="tab-network" class="tab-panel"></section>
+        <section id="tab-performance" class="tab-panel"></section>
+        <section id="tab-hardware" class="tab-panel"></section>
+        <section id="tab-services" class="tab-panel"></section>
+
+        <section id="tab-docker" class="tab-panel">
+          <div class="empty">
+            Docker information has not been loaded yet.
+          </div>
+        </section>
+
+        <section id="tab-history" class="tab-panel"></section>
+      </div>
+    </section>
+
+    <section class="card output-card">
+      <div class="toolbar">
+        <h2>Output</h2>
+        <span class="badge">iperf3 port {{ iperf_port }}</span>
       </div>
 
-      <section id="tab-overview" class="tab-panel active"></section>
-      <section id="tab-storage" class="tab-panel"></section>
-      <section id="tab-network" class="tab-panel"></section>
-      <section id="tab-performance" class="tab-panel"></section>
-      <section id="tab-hardware" class="tab-panel"></section>
-      <section id="tab-services" class="tab-panel"></section>
-      <section id="tab-docker" class="tab-panel">
-        <div class="empty">Docker information has not been loaded yet.</div>
-      </section>
-      <section id="tab-history" class="tab-panel"></section>
-    </div>
-  </section>
-
-  <section class="card" style="margin-top:16px">
-    <div class="toolbar">
-      <h2 style="margin:0">Output</h2>
-      <span class="badge">iperf3 port {{ iperf_port }}</span>
-    </div>
-    <pre id="output">Ready.</pre>
-  </section>
-</main>
+      <pre id="output">Ready.</pre>
+    </section>
+  </main>
 
   <script src="{{ url_for('static', filename='js/core.js') }}?v={{ app_version }}"></script>
   <script src="{{ url_for('static', filename='js/hardware.js') }}?v={{ app_version }}"></script>
