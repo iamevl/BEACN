@@ -72,11 +72,21 @@ def init_db():
         with db() as conn:
             initialise_schema(conn)
 
+
 def valid_target(value):
     try:
         ip = ipaddress.ip_address(value)
         subnet = ipaddress.ip_network(NETWORK_SUBNET, strict=False)
         return ip in subnet
+    except ValueError:
+        return False
+
+
+def valid_subnet(value):
+    try:
+        requested = ipaddress.ip_network(value, strict=False)
+        configured = ipaddress.ip_network(NETWORK_SUBNET, strict=False)
+        return requested == configured
     except ValueError:
         return False
 
@@ -96,9 +106,23 @@ def _is_valid_ping_args(args):
 
 
 def _is_valid_nmap_args(args):
-    return (
-        isinstance(args, list)
-        and len(args) == 7
+    if not isinstance(args, list):
+        return False
+
+    # Discovery scan
+    if (
+        len(args) == 4
+        and args[0] == "nmap"
+        and args[1] == "-sn"
+        and args[2] == "-n"
+        and isinstance(args[3], str)
+        and valid_subnet(args[3])
+    ):
+        return True
+
+    # Top 100 ports scan
+    if (
+        len(args) == 6
         and args[0] == "nmap"
         and args[1] == "-Pn"
         and args[2] == "-T4"
@@ -106,7 +130,11 @@ def _is_valid_nmap_args(args):
         and args[4] == "100"
         and isinstance(args[5], str)
         and valid_target(args[5])
-    )
+    ):
+        return True
+
+    return False
+
 
 
 COMMAND_VALIDATORS = {
