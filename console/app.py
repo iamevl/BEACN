@@ -81,7 +81,59 @@ def valid_target(value):
         return False
 
 
+def _is_valid_ping_args(args):
+    return (
+        isinstance(args, list)
+        and len(args) == 6
+        and args[0] == "ping"
+        and args[1] == "-c"
+        and args[2] == "4"
+        and args[3] == "-W"
+        and args[4] == "2"
+        and isinstance(args[5], str)
+        and valid_target(args[5])
+    )
+
+
+def _is_valid_nmap_args(args):
+    return (
+        isinstance(args, list)
+        and len(args) == 7
+        and args[0] == "nmap"
+        and args[1] == "-Pn"
+        and args[2] == "-T4"
+        and args[3] == "--top-ports"
+        and args[4] == "100"
+        and isinstance(args[5], str)
+        and valid_target(args[5])
+    )
+
+
+COMMAND_VALIDATORS = {
+    "ping": _is_valid_ping_args,
+    "nmap": _is_valid_nmap_args,
+}
+
+
 def run_command(args, timeout=COMMAND_TIMEOUT):
+    if not isinstance(args, list) or not args:
+        return {
+            "ok": False,
+            "returncode": 2,
+            "stdout": "",
+            "stderr": "Invalid command arguments.",
+        }
+
+    command = args[0]
+    validator = COMMAND_VALIDATORS.get(command)
+    if validator is None or not validator(args):
+        return {
+            "ok": False,
+            "returncode": 2,
+            "stdout": "",
+            "stderr": "Command is not allowed.",
+        }
+
     try:
         result = subprocess.run(
             args,
