@@ -144,9 +144,8 @@
       ? `${os.product_name}${os.display_version ? ` · ${os.display_version}` : ''}`
       : (device?.ip || '—');
 
-    document.getElementById('heroStatus').innerHTML = device?.is_online
-      ? '<span class="good">● Online</span>'
-      : '<span class="bad">● Offline</span>';
+document.getElementById('heroStatus').innerHTML =
+  renderComponentStatus(device);
 
     document.getElementById('tab-overview').innerHTML = device ? `
       <div class="hero-grid">
