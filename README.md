@@ -15,8 +15,7 @@ BEACN is a lightweight monitoring platform designed to provide fast visibility i
 ---
 This project is **not affiliated with, endorsed by, or associated with BEACN (the audio hardware company)** or any other organisation using the BEACN name.
 
-If you're looking for professional microphones, audio interfaces or streaming hardware, please visit their official website:
-https://www.beacn.com
+If you're looking for professional, broadcast audio products such as microphones, audio interfaces or streaming hardware, please visit their official website: [Beacn.com](https://www.beacn.com) they produce some excellent products.
 
 ---
 Unlike enterprise monitoring suites that require databases, collectors and complex configuration, BEACN is designed to deploy in minutes while remaining extensible enough to grow into a full monitoring platform.
