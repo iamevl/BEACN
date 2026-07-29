@@ -12,13 +12,65 @@ let devices = [];
   const status = document.getElementById('status');
 
   const esc = value => String(value ?? '')
-    .replaceAll('&', '&amp;')
-    .replaceAll('<', '&lt;')
-    .replaceAll('>', '&gt;')
-    .replaceAll('"', '&quot;')
-    .replaceAll("'", '&#039;');
+  .replaceAll('&', '&amp;')
+  .replaceAll('<', '&lt;')
+  .replaceAll('>', '&gt;')
+  .replaceAll('"', '&quot;')
+  .replaceAll("'", '&#039;');
 
-  const selected = () => devices.find(device => device.ip === select.value);
+function hasAgent(device, agent = null) {
+  return Boolean(
+    device?.agent_available ||
+    device?.agent ||
+    device?.agent_version ||
+    agent?.agent ||
+    agent?.version
+  );
+}
+
+function componentStatusIcon(device, agent = null) {
+  return hasAgent(device, agent)
+    ? 'agent.svg'
+    : 'discovery.svg';
+}
+
+function renderComponentStatus(device, agent = null) {
+  const heroStatus = document.getElementById('heroStatus');
+
+  if (!heroStatus) {
+    return;
+  }
+
+  if (!device) {
+    heroStatus.innerHTML = `
+      <span class="component-status unknown">
+        Unknown
+      </span>
+    `;
+    return;
+  }
+
+  const online = Boolean(device.is_online);
+  const agentDevice = hasAgent(device, agent);
+  const component = agentDevice ? 'Agent' : 'Discovery';
+  const state = online ? 'Online' : 'Offline';
+  const stateClass = online ? 'online' : 'offline';
+  const icon = componentStatusIcon(device, agent);
+
+  heroStatus.innerHTML = `
+    <span class="component-status ${stateClass}">
+      <img
+        class="component-status-icon"
+        src="/static/branding/icons/${icon}"
+        alt=""
+        aria-hidden="true"
+      >
+      <span>${component} ${state}</span>
+    </span>
+  `;
+}
+
+const selected = () => devices.find(device => device.ip === select.value);
 
   function bytes(value) {
     value = Number(value);
