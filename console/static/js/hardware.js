@@ -145,7 +145,7 @@
       : (device?.ip || '—');
 
 document.getElementById('heroStatus').innerHTML =
-  renderComponentStatus(device);
+  renderComponentStatus(device, agent);
 
     document.getElementById('tab-overview').innerHTML = device ? `
       <div class="hero-grid">
