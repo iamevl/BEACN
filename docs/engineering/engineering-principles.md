@@ -71,3 +71,7 @@ Avoid duplicate models, duplicated configuration and duplicated business logic.
 Every feature should make future features easier.
 
 Avoid shortcuts that create technical debt.
+
+---
+
+Every release should leave BEACN simpler, more consistent, and easier to extend than the release before it.
