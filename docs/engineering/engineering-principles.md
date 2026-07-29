@@ -6,7 +6,7 @@ These principles guide architectural and engineering decisions throughout the BE
 
 ---
 
-## Principle 0 – Simplicity First
+##  0. Simplicity First
 
 Every design decision should make BEACN easier to understand, easier to deploy and easier to operate.
 
