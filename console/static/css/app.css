@@ -111,9 +111,48 @@
       padding: 4px 9px; border-radius: 999px;
       background: #20304a; font-size: 12px; gap: 5px;
     }
-    .good { color: var(--accent); }
-    .warn { color: var(--warning); }
-    .bad { color: var(--danger); }
+.good {
+  color: var(--success);
+}
+
+.warn {
+  color: var(--warning);
+}
+
+.bad {
+  color: var(--danger);
+}
+.component-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+}
+
+.component-status-icon {
+  width: 16px;
+  height: 16px;
+  flex: 0 0 16px;
+}
+
+.component-status.online {
+  color: var(--accent);
+}
+
+.component-status.offline {
+  color: var(--danger);
+}
+
+.component-status.offline .component-status-icon {
+  filter:
+    brightness(0)
+    saturate(100%)
+    invert(38%)
+    sepia(95%)
+    saturate(2755%)
+    hue-rotate(340deg)
+    brightness(104%)
+    contrast(88%);
+}
     .device-hero {
       justify-content: space-between; align-items: flex-start;
       padding-bottom: 16px; border-bottom: 1px solid var(--border);
