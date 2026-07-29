@@ -1,17 +1,17 @@
 :root {
   color-scheme: dark;
 
-  --bg: var(--beacn-background);
-  --panel: var(--beacn-surface);
+  --bg: var(--beacn-background, #0F172A);
+  --panel: var(--beacn-surface, #18233F);
   --panel2: #1B2841;
-  --text: var(--beacn-primary-text);
-  --muted: var(--beacn-secondary-text);
-  --accent: var(--beacn-accent);
-  --success: var(--beacn-success);
-  --warning: var(--beacn-warning);
-  --danger: var(--beacn-error);
-  --info: var(--beacn-info);
-  --border: var(--beacn-border);
+  --text: var(--beacn-primary-text, #F8FAFC);
+  --muted: var(--beacn-secondary-text, #A7B8D9);
+  --accent: var(--beacn-accent, #67E8C8);
+  --success: var(--beacn-success, #22C55E);
+  --warning: var(--beacn-warning, #FBBF24);
+  --danger: var(--beacn-error, #EF4444);
+  --info: var(--beacn-info, #60A5FA);
+  --border: var(--beacn-border, #2A3C63);
   --chart-grid: #24324E;
 }
 .app-header {
