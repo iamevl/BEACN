@@ -831,7 +831,7 @@ def unavailable_docker_payload(error, source="agent"):
     return {
         "available": False,
         "source": source,
-        "error": str(error),
+        "error": "Docker telemetry is currently unavailable.",
         "engine": {
             "containers_total": 0,
             "containers_running": 0,
@@ -852,6 +852,7 @@ def docker_overview():
         payload["source"] = "dashboard-host"
         return jsonify(payload)
     except (DockerException, RuntimeError, OSError) as exc:
+        app.logger.exception("Failed to collect local Docker telemetry: %s", exc)
         return jsonify(unavailable_docker_payload(exc, "dashboard-host"))
 
 
