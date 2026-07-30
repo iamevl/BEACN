@@ -58,6 +58,11 @@ from beacn.services.agent import (
     tcp_open,
 )
 
+from beacn.services.discovery import (
+    parse_nmap_discovery,
+    reverse_dns,
+)
+
 app = Flask(__name__)
 scan_lock = threading.Lock()
 db_write_lock = threading.RLock()
@@ -82,50 +87,6 @@ def init_db():
         with db() as conn:
             initialise_schema(conn)
 
-
-
-def reverse_dns(ip):
-    try:
-        return socket.gethostbyaddr(ip)[0]
-    except (socket.herror, socket.gaierror, OSError):
-        return ""
-
-
-def parse_nmap_discovery(output):
-    devices = []
-    current = None
-
-    for line in output.splitlines():
-        line = line.strip()
-
-        if line.startswith("Nmap scan report for "):
-            value = line.replace("Nmap scan report for ", "", 1)
-            hostname = ""
-            ip = value
-            match = re.match(r"(.+?) \(([\d.]+)\)$", value)
-
-            if match:
-                hostname, ip = match.group(1), match.group(2)
-
-            current = {
-                "ip": ip,
-                "hostname": hostname,
-                "mac": "",
-                "vendor": "",
-            }
-            devices.append(current)
-
-        elif current and line.startswith("MAC Address:"):
-            match = re.match(
-                r"MAC Address:\s+([0-9A-F:]+)\s*(?:\((.*?)\))?$",
-                line,
-                re.I,
-            )
-            if match:
-                current["mac"] = match.group(1).upper()
-                current["vendor"] = match.group(2) or ""
-
-    return devices
 
 
 def normalise_windows_name(agent_payload):
