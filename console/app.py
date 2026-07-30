@@ -52,6 +52,12 @@ from beacn.services.commands import (
     valid_target,
 )
 
+from beacn.services.agent import (
+    fetch_agent_json,
+    fetch_agent_status,
+    tcp_open,
+)
+
 app = Flask(__name__)
 scan_lock = threading.Lock()
 db_write_lock = threading.RLock()
@@ -76,40 +82,6 @@ def init_db():
         with db() as conn:
             initialise_schema(conn)
 
-
-
-def tcp_open(ip, port, timeout=0.5):
-    try:
-        with socket.create_connection((ip, port), timeout=timeout):
-            return True
-    except OSError:
-        return False
-
-
-def fetch_agent_json(ip, path):
-    clean_path = "/" + str(path).lstrip("/")
-    url = f"http://{ip}:{AGENT_PORT}{clean_path}"
-    try:
-        req = urllib.request.Request(
-            url,
-            headers={"Accept": "application/json"},
-        )
-        with urllib.request.urlopen(req, timeout=AGENT_TIMEOUT) as response:
-            if response.status != 200:
-                return None
-            payload = json.loads(response.read().decode("utf-8"))
-            return payload if isinstance(payload, dict) else None
-    except (
-        urllib.error.URLError,
-        TimeoutError,
-        json.JSONDecodeError,
-        OSError,
-    ):
-        return None
-
-
-def fetch_agent_status(ip):
-    return fetch_agent_json(ip, "/status")
 
 
 def reverse_dns(ip):
