@@ -26,27 +26,31 @@ except ImportError:
     DockerException = Exception
     NotFound = Exception
 
-try:
-    from version import APP_NAME, APP_STAGE, APP_VERSION
-except ImportError:
-    APP_NAME = "BEACN"
-    APP_VERSION = "0.4.0"
-    APP_STAGE = "Live Monitoring"
+from beacn.config import (
+    AGENT_PORT,
+    AGENT_TIMEOUT,
+    APP_NAME,
+    APP_PORT,
+    APP_STAGE,
+    APP_VERSION,
+    COMMAND_TIMEOUT,
+    DATA_DIR,
+    DB_PATH,
+    DOCKER_MONITORING_ENABLED,
+    DOCKER_TIMEOUT_SECONDS,
+    IPERF_PORT,
+    METRICS_INTERVAL_SECONDS,
+    NETWORK_SUBNET,
+    SCAN_TIMEOUT,
+    TELEMETRY_MAX_POINTS,
+    TELEMETRY_RETENTION_DAYS,
+)
 
-APP_PORT = int(os.getenv("APP_PORT", "8766"))
-NETWORK_SUBNET = os.getenv("NETWORK_SUBNET", "192.168.1.0/24")
-IPERF_PORT = int(os.getenv("IPERF_PORT", "5201"))
-AGENT_PORT = int(os.getenv("AGENT_PORT", "8767"))
-AGENT_TIMEOUT = float(os.getenv("AGENT_TIMEOUT", "1.5"))
-SCAN_TIMEOUT = int(os.getenv("SCAN_TIMEOUT", "90"))
-COMMAND_TIMEOUT = int(os.getenv("COMMAND_TIMEOUT", "20"))
-DATA_DIR = Path(os.getenv("DATA_DIR", "/data"))
-DB_PATH = DATA_DIR / "beacn.db"
-TELEMETRY_RETENTION_DAYS = int(os.getenv("TELEMETRY_RETENTION_DAYS", "30"))
-TELEMETRY_MAX_POINTS = int(os.getenv("TELEMETRY_MAX_POINTS", "1000"))
-METRICS_INTERVAL_SECONDS = max(5, int(os.getenv("METRICS_INTERVAL_SECONDS", "15")))
-DOCKER_MONITORING_ENABLED = os.getenv("DOCKER_MONITORING_ENABLED", "true").lower() in {"1", "true", "yes", "on"}
-DOCKER_TIMEOUT_SECONDS = max(1, int(os.getenv("DOCKER_TIMEOUT_SECONDS", "5")))
+from beacn.services.commands import (
+    normalize_target,
+    run_command,
+    valid_target,
+)
 
 app = Flask(__name__)
 scan_lock = threading.Lock()
@@ -72,166 +76,6 @@ def init_db():
         with db() as conn:
             initialise_schema(conn)
 
-
-
-def normalize_target(value):
-    return str(ipaddress.ip_address(value))
-
-
-def valid_target(value):
-    try:
-        ip = ipaddress.ip_address(value)
-        subnet = ipaddress.ip_network(NETWORK_SUBNET, strict=False)
-        return ip in subnet
-    except ValueError:
-        return False
-
-
-def valid_subnet(value):
-    try:
-        requested = ipaddress.ip_network(value, strict=False)
-        configured = ipaddress.ip_network(NETWORK_SUBNET, strict=False)
-        return requested == configured
-    except ValueError:
-        return False
-
-
-def _is_valid_ping_args(args):
-    return (
-        isinstance(args, list)
-        and len(args) == 6
-        and args[0] == "ping"
-        and args[1] == "-c"
-        and args[2] == "4"
-        and args[3] == "-W"
-        and args[4] == "2"
-        and isinstance(args[5], str)
-        and valid_target(args[5])
-    )
-
-
-def _is_valid_nmap_args(args):
-    if not isinstance(args, list):
-        return False
-
-    # Discovery scan
-    if (
-        len(args) == 4
-        and args[0] == "nmap"
-        and args[1] == "-sn"
-        and args[2] == "-n"
-        and isinstance(args[3], str)
-        and valid_subnet(args[3])
-    ):
-        return True
-
-    # Top 100 ports scan
-    if (
-        len(args) == 6
-        and args[0] == "nmap"
-        and args[1] == "-Pn"
-        and args[2] == "-T4"
-        and args[3] == "--top-ports"
-        and args[4] == "100"
-        and isinstance(args[5], str)
-        and valid_target(args[5])
-    ):
-        return True
-
-    return False
-
-
-
-def _is_valid_iperf_args(args):
-    if not isinstance(args, list):
-        return False
-
-    # Forward:
-    # iperf3 -c <target> -p 5201 -J -t 10
-    if (
-        len(args) == 8
-        and args[0] == "iperf3"
-        and args[1] == "-c"
-        and isinstance(args[2], str)
-        and valid_target(args[2])
-        and args[3] == "-p"
-        and args[4] == str(IPERF_PORT)
-        and args[5] == "-J"
-        and args[6] == "-t"
-        and args[7] == "10"
-    ):
-        return True
-
-    # Reverse:
-    # iperf3 -c <target> -p 5201 -J -t 10 -R
-    if (
-        len(args) == 9
-        and args[0] == "iperf3"
-        and args[1] == "-c"
-        and isinstance(args[2], str)
-        and valid_target(args[2])
-        and args[3] == "-p"
-        and args[4] == str(IPERF_PORT)
-        and args[5] == "-J"
-        and args[6] == "-t"
-        and args[7] == "10"
-        and args[8] == "-R"
-    ):
-        return True
-
-    return False
-
-
-COMMAND_VALIDATORS = {
-    "ping": _is_valid_ping_args,
-    "nmap": _is_valid_nmap_args,
-    "iperf3": _is_valid_iperf_args,
-}
-
-
-def run_command(args, timeout=COMMAND_TIMEOUT):
-    if not isinstance(args, list) or not args:
-        return {
-            "ok": False,
-            "returncode": 2,
-            "stdout": "",
-            "stderr": "Invalid command arguments.",
-        }
-
-    command = args[0]
-    validator = COMMAND_VALIDATORS.get(command)
-    if validator is None or not validator(args):
-        return {
-            "ok": False,
-            "returncode": 2,
-            "stdout": "",
-            "stderr": "Command is not allowed.",
-        }
-
-    try:
-        result = subprocess.run(
-            args,
-            capture_output=True,
-            text=True,
-            timeout=timeout,
-            check=False,
-            env={**os.environ, "LC_ALL": "C"},
-        )
-        return {
-            "ok": result.returncode == 0,
-            "returncode": result.returncode,
-            "stdout": result.stdout.strip(),
-            "stderr": result.stderr.strip(),
-        }
-    except subprocess.TimeoutExpired as exc:
-        return {
-            "ok": False,
-            "returncode": 124,
-            "stdout": (exc.stdout or "").strip()
-            if isinstance(exc.stdout, str)
-            else "",
-            "stderr": f"Command timed out after {timeout} seconds.",
-        }
 
 
 def tcp_open(ip, port, timeout=0.5):
