@@ -15,51 +15,69 @@ from uuid import uuid4
 
 from flask import Flask, jsonify, render_template, request
 
-from beacn.database import Database, initialise_schema
-from beacn.inventory import DeviceRepository
+from beacn.database import initialise_schema
 
 try:
-    import docker
-    from docker.errors import DockerException, NotFound
+    from docker.errors import DockerException
 except ImportError:
-    docker = None
     DockerException = Exception
-    NotFound = Exception
 
-try:
-    from version import APP_NAME, APP_STAGE, APP_VERSION
-except ImportError:
-    APP_NAME = "BEACN"
-    APP_VERSION = "0.4.0"
-    APP_STAGE = "Live Monitoring"
+from beacn.config import (
+    AGENT_PORT,
+    AGENT_TIMEOUT,
+    APP_NAME,
+    APP_PORT,
+    APP_STAGE,
+    APP_VERSION,
+    COMMAND_TIMEOUT,
+    DATA_DIR,
+    IPERF_PORT,
+    METRICS_INTERVAL_SECONDS,
+    NETWORK_SUBNET,
+    SCAN_TIMEOUT,
+    TELEMETRY_MAX_POINTS,
+    TELEMETRY_RETENTION_DAYS,
+)
 
-APP_PORT = int(os.getenv("APP_PORT", "8766"))
-NETWORK_SUBNET = os.getenv("NETWORK_SUBNET", "192.168.1.0/24")
-IPERF_PORT = int(os.getenv("IPERF_PORT", "5201"))
-AGENT_PORT = int(os.getenv("AGENT_PORT", "8767"))
-AGENT_TIMEOUT = float(os.getenv("AGENT_TIMEOUT", "1.5"))
-SCAN_TIMEOUT = int(os.getenv("SCAN_TIMEOUT", "90"))
-COMMAND_TIMEOUT = int(os.getenv("COMMAND_TIMEOUT", "20"))
-DATA_DIR = Path(os.getenv("DATA_DIR", "/data"))
-DB_PATH = DATA_DIR / "beacn.db"
-TELEMETRY_RETENTION_DAYS = int(os.getenv("TELEMETRY_RETENTION_DAYS", "30"))
-TELEMETRY_MAX_POINTS = int(os.getenv("TELEMETRY_MAX_POINTS", "1000"))
-METRICS_INTERVAL_SECONDS = max(5, int(os.getenv("METRICS_INTERVAL_SECONDS", "15")))
-DOCKER_MONITORING_ENABLED = os.getenv("DOCKER_MONITORING_ENABLED", "true").lower() in {"1", "true", "yes", "on"}
-DOCKER_TIMEOUT_SECONDS = max(1, int(os.getenv("DOCKER_TIMEOUT_SECONDS", "5")))
+from beacn.services.commands import (
+    normalize_target,
+    run_command,
+    valid_target,
+)
+
+from beacn.services.agent import (
+    fetch_agent_json,
+    fetch_agent_status,
+    tcp_open,
+)
+
+from beacn.services.discovery import (
+    parse_nmap_discovery,
+    reverse_dns,
+)
+
+from beacn.services.telemetry import (
+    prune_telemetry,
+    save_telemetry,
+    update_device_from_agent,
+)
+from beacn.services.docker_monitor import (
+    docker_snapshot,
+)
+
+from beacn.runtime import (
+    database,
+    repository,
+    scan_lock,
+    db_write_lock,
+    scan_state,
+)
 
 app = Flask(__name__)
-scan_lock = threading.Lock()
-db_write_lock = threading.RLock()
-scan_state = {"running": False, "last_error": None}
-
 
 def utc_now():
     return datetime.now(timezone.utc).isoformat(timespec="seconds")
 
-
-database = Database(DB_PATH)
-repository = DeviceRepository(database)
 
 
 def db():
@@ -72,244 +90,6 @@ def init_db():
         with db() as conn:
             initialise_schema(conn)
 
-
-
-def normalize_target(value):
-    return str(ipaddress.ip_address(value))
-
-
-def valid_target(value):
-    try:
-        ip = ipaddress.ip_address(value)
-        subnet = ipaddress.ip_network(NETWORK_SUBNET, strict=False)
-        return ip in subnet
-    except ValueError:
-        return False
-
-
-def valid_subnet(value):
-    try:
-        requested = ipaddress.ip_network(value, strict=False)
-        configured = ipaddress.ip_network(NETWORK_SUBNET, strict=False)
-        return requested == configured
-    except ValueError:
-        return False
-
-
-def _is_valid_ping_args(args):
-    return (
-        isinstance(args, list)
-        and len(args) == 6
-        and args[0] == "ping"
-        and args[1] == "-c"
-        and args[2] == "4"
-        and args[3] == "-W"
-        and args[4] == "2"
-        and isinstance(args[5], str)
-        and valid_target(args[5])
-    )
-
-
-def _is_valid_nmap_args(args):
-    if not isinstance(args, list):
-        return False
-
-    # Discovery scan
-    if (
-        len(args) == 4
-        and args[0] == "nmap"
-        and args[1] == "-sn"
-        and args[2] == "-n"
-        and isinstance(args[3], str)
-        and valid_subnet(args[3])
-    ):
-        return True
-
-    # Top 100 ports scan
-    if (
-        len(args) == 6
-        and args[0] == "nmap"
-        and args[1] == "-Pn"
-        and args[2] == "-T4"
-        and args[3] == "--top-ports"
-        and args[4] == "100"
-        and isinstance(args[5], str)
-        and valid_target(args[5])
-    ):
-        return True
-
-    return False
-
-
-
-def _is_valid_iperf_args(args):
-    if not isinstance(args, list):
-        return False
-
-    # Forward:
-    # iperf3 -c <target> -p 5201 -J -t 10
-    if (
-        len(args) == 8
-        and args[0] == "iperf3"
-        and args[1] == "-c"
-        and isinstance(args[2], str)
-        and valid_target(args[2])
-        and args[3] == "-p"
-        and args[4] == str(IPERF_PORT)
-        and args[5] == "-J"
-        and args[6] == "-t"
-        and args[7] == "10"
-    ):
-        return True
-
-    # Reverse:
-    # iperf3 -c <target> -p 5201 -J -t 10 -R
-    if (
-        len(args) == 9
-        and args[0] == "iperf3"
-        and args[1] == "-c"
-        and isinstance(args[2], str)
-        and valid_target(args[2])
-        and args[3] == "-p"
-        and args[4] == str(IPERF_PORT)
-        and args[5] == "-J"
-        and args[6] == "-t"
-        and args[7] == "10"
-        and args[8] == "-R"
-    ):
-        return True
-
-    return False
-
-
-COMMAND_VALIDATORS = {
-    "ping": _is_valid_ping_args,
-    "nmap": _is_valid_nmap_args,
-    "iperf3": _is_valid_iperf_args,
-}
-
-
-def run_command(args, timeout=COMMAND_TIMEOUT):
-    if not isinstance(args, list) or not args:
-        return {
-            "ok": False,
-            "returncode": 2,
-            "stdout": "",
-            "stderr": "Invalid command arguments.",
-        }
-
-    command = args[0]
-    validator = COMMAND_VALIDATORS.get(command)
-    if validator is None or not validator(args):
-        return {
-            "ok": False,
-            "returncode": 2,
-            "stdout": "",
-            "stderr": "Command is not allowed.",
-        }
-
-    try:
-        result = subprocess.run(
-            args,
-            capture_output=True,
-            text=True,
-            timeout=timeout,
-            check=False,
-            env={**os.environ, "LC_ALL": "C"},
-        )
-        return {
-            "ok": result.returncode == 0,
-            "returncode": result.returncode,
-            "stdout": result.stdout.strip(),
-            "stderr": result.stderr.strip(),
-        }
-    except subprocess.TimeoutExpired as exc:
-        return {
-            "ok": False,
-            "returncode": 124,
-            "stdout": (exc.stdout or "").strip()
-            if isinstance(exc.stdout, str)
-            else "",
-            "stderr": f"Command timed out after {timeout} seconds.",
-        }
-
-
-def tcp_open(ip, port, timeout=0.5):
-    try:
-        with socket.create_connection((ip, port), timeout=timeout):
-            return True
-    except OSError:
-        return False
-
-
-def fetch_agent_json(ip, path):
-    clean_path = "/" + str(path).lstrip("/")
-    url = f"http://{ip}:{AGENT_PORT}{clean_path}"
-    try:
-        req = urllib.request.Request(
-            url,
-            headers={"Accept": "application/json"},
-        )
-        with urllib.request.urlopen(req, timeout=AGENT_TIMEOUT) as response:
-            if response.status != 200:
-                return None
-            payload = json.loads(response.read().decode("utf-8"))
-            return payload if isinstance(payload, dict) else None
-    except (
-        urllib.error.URLError,
-        TimeoutError,
-        json.JSONDecodeError,
-        OSError,
-    ):
-        return None
-
-
-def fetch_agent_status(ip):
-    return fetch_agent_json(ip, "/status")
-
-
-def reverse_dns(ip):
-    try:
-        return socket.gethostbyaddr(ip)[0]
-    except (socket.herror, socket.gaierror, OSError):
-        return ""
-
-
-def parse_nmap_discovery(output):
-    devices = []
-    current = None
-
-    for line in output.splitlines():
-        line = line.strip()
-
-        if line.startswith("Nmap scan report for "):
-            value = line.replace("Nmap scan report for ", "", 1)
-            hostname = ""
-            ip = value
-            match = re.match(r"(.+?) \(([\d.]+)\)$", value)
-
-            if match:
-                hostname, ip = match.group(1), match.group(2)
-
-            current = {
-                "ip": ip,
-                "hostname": hostname,
-                "mac": "",
-                "vendor": "",
-            }
-            devices.append(current)
-
-        elif current and line.startswith("MAC Address:"):
-            match = re.match(
-                r"MAC Address:\s+([0-9A-F:]+)\s*(?:\((.*?)\))?$",
-                line,
-                re.I,
-            )
-            if match:
-                current["mac"] = match.group(1).upper()
-                current["vendor"] = match.group(2) or ""
-
-    return devices
 
 
 def normalise_windows_name(agent_payload):
@@ -333,128 +113,6 @@ def normalise_windows_name(agent_payload):
         )
 
     return agent_payload
-
-
-def prune_telemetry(conn):
-    cutoff = (
-        datetime.now(timezone.utc) - timedelta(days=TELEMETRY_RETENTION_DAYS)
-    ).isoformat(timespec="seconds")
-    conn.execute(
-        "DELETE FROM telemetry_history WHERE created_at < ?",
-        (cutoff,),
-    )
-
-
-def _finite(value):
-    try:
-        return float(value)
-    except (TypeError, ValueError):
-        return None
-
-
-def _hardware_nodes(hardware):
-    result = []
-    def visit(node):
-        if not isinstance(node, dict):
-            return
-        result.append(node)
-        for child in node.get("subHardware", []) or []:
-            visit(child)
-    for node in hardware.get("hardware", []) or []:
-        visit(node)
-    return result
-
-
-def _sensor(node, sensor_type, names=()):
-    sensors = [
-        item for item in (node or {}).get("sensors", []) or []
-        if item.get("type") == sensor_type and _finite(item.get("value")) is not None
-    ]
-    for name in names:
-        for item in sensors:
-            if str(item.get("name", "")).lower() == name.lower():
-                return _finite(item.get("value"))
-    return _finite(sensors[0].get("value")) if sensors else None
-
-
-def telemetry_metrics(agent_payload):
-    hardware = agent_payload.get("hardware", {}) or {}
-    nodes = _hardware_nodes(hardware)
-    cpu = next((n for n in nodes if str(n.get("type", "")).lower() == "cpu"), {})
-    gpu = next((n for n in nodes if str(n.get("type", "")).lower().startswith("gpu")), {})
-    clocks = [
-        _finite(item.get("value"))
-        for item in cpu.get("sensors", []) or []
-        if item.get("type") == "Clock"
-        and re.match(r"^(P-Core|E-Core|CPU Core)", str(item.get("name", "")), re.I)
-    ]
-    clocks = [value for value in clocks if value is not None]
-    return {
-        "cpu_temperature_c": _finite(hardware.get("summary", {}).get("cpuTemperatureC")),
-        "cpu_power_w": _finite(hardware.get("summary", {}).get("cpuPowerW")),
-        "cpu_clock_mhz": max(clocks) if clocks else None,
-        "gpu_load_percent": _sensor(gpu, "Load", ("GPU Core", "D3D 3D", "GPU Total")),
-        "gpu_temperature_c": _sensor(gpu, "Temperature", ("GPU Core", "GPU Hot Spot")),
-        "gpu_power_w": _sensor(gpu, "Power", ("GPU Power",)),
-    }
-
-
-def save_telemetry(conn, target_ip, agent_payload, created_at):
-    performance = agent_payload.get("performance", {})
-    device_info = agent_payload.get("device", {})
-    metrics = telemetry_metrics(agent_payload)
-
-    conn.execute("""
-        INSERT INTO telemetry_history (
-            target_ip, cpu_percent, memory_percent,
-            memory_available_bytes, uptime_seconds,
-            cpu_temperature_c, cpu_power_w, cpu_clock_mhz,
-            gpu_load_percent, gpu_temperature_c, gpu_power_w,
-            created_at
-        )
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-    """, (
-        target_ip, performance.get("cpu_percent"),
-        performance.get("memory_percent"),
-        performance.get("memory_available_bytes"),
-        device_info.get("uptime_seconds"),
-        metrics["cpu_temperature_c"], metrics["cpu_power_w"],
-        metrics["cpu_clock_mhz"], metrics["gpu_load_percent"],
-        metrics["gpu_temperature_c"], metrics["gpu_power_w"],
-        created_at,
-    ))
-
-def update_device_from_agent(conn, target_ip, agent_payload, seen_at):
-    performance = agent_payload.get("performance", {})
-    device_info = agent_payload.get("device", {})
-    agent_info = agent_payload.get("agent", {})
-    services = agent_payload.get("services", {})
-
-    conn.execute("""
-        UPDATE devices
-        SET agent_available = 1,
-            agent_version = ?,
-            agent_hostname = ?,
-            cpu_percent = ?,
-            memory_percent = ?,
-            uptime_seconds = ?,
-            agent_last_seen = ?,
-            agent_payload = ?,
-            iperf_available = ?
-        WHERE ip = ?
-    """, (
-        str(agent_info.get("version", "")).strip(),
-        str(device_info.get("hostname", "")).strip(),
-        performance.get("cpu_percent"),
-        performance.get("memory_percent"),
-        device_info.get("uptime_seconds"),
-        seen_at,
-        json.dumps(agent_payload, separators=(",", ":")),
-        int(bool(services.get("iperf3", {}).get("running", False))),
-        target_ip,
-    ))
-
-    save_telemetry(conn, target_ip, agent_payload, seen_at)
 
 
 def scan_network():
@@ -641,150 +299,6 @@ def collect_agent_metrics():
         except Exception as exc:
             scan_state["last_error"] = f"Metrics collector: {exc}"
         threading.Event().wait(METRICS_INTERVAL_SECONDS)
-
-
-def docker_client():
-    if not DOCKER_MONITORING_ENABLED:
-        raise RuntimeError("Docker monitoring is disabled.")
-    if docker is None:
-        raise RuntimeError("The Docker SDK is not installed.")
-    return docker.from_env(timeout=DOCKER_TIMEOUT_SECONDS)
-
-
-def docker_cpu_percent(stats):
-    cpu_stats = stats.get("cpu_stats") or {}
-    previous = stats.get("precpu_stats") or {}
-    cpu_total = (
-        (cpu_stats.get("cpu_usage") or {}).get("total_usage")
-        or 0
-    )
-    previous_total = (
-        (previous.get("cpu_usage") or {}).get("total_usage")
-        or 0
-    )
-    system_total = cpu_stats.get("system_cpu_usage") or 0
-    previous_system = previous.get("system_cpu_usage") or 0
-    cpu_delta = cpu_total - previous_total
-    system_delta = system_total - previous_system
-
-    online_cpus = cpu_stats.get("online_cpus")
-    if not online_cpus:
-        percpu = (cpu_stats.get("cpu_usage") or {}).get("percpu_usage") or []
-        online_cpus = len(percpu) or 1
-
-    if cpu_delta <= 0 or system_delta <= 0:
-        return 0.0
-
-    return round((cpu_delta / system_delta) * online_cpus * 100.0, 2)
-
-
-def docker_memory(stats):
-    memory = stats.get("memory_stats") or {}
-    usage = int(memory.get("usage") or 0)
-    limit = int(memory.get("limit") or 0)
-    cache = int(
-        (memory.get("stats") or {}).get("inactive_file")
-        or (memory.get("stats") or {}).get("cache")
-        or 0
-    )
-    working_set = max(0, usage - cache)
-    percent = (working_set / limit * 100.0) if limit else 0.0
-    return working_set, limit, round(percent, 2)
-
-
-def docker_network_totals(stats):
-    networks = stats.get("networks") or {}
-    received = sum(int(item.get("rx_bytes") or 0) for item in networks.values())
-    transmitted = sum(int(item.get("tx_bytes") or 0) for item in networks.values())
-    return received, transmitted
-
-
-def docker_ports(attrs):
-    ports = ((attrs.get("NetworkSettings") or {}).get("Ports") or {})
-    output = []
-
-    for container_port, bindings in ports.items():
-        if not bindings:
-            output.append(container_port)
-            continue
-
-        for binding in bindings:
-            host_ip = binding.get("HostIp") or "0.0.0.0"
-            host_port = binding.get("HostPort") or ""
-            output.append(f"{host_ip}:{host_port} → {container_port}")
-
-    return output
-
-
-def docker_container_summary(container):
-    container.reload()
-    attrs = container.attrs or {}
-    state = attrs.get("State") or {}
-    config = attrs.get("Config") or {}
-
-    stats = {}
-
-    memory_used, memory_limit, memory_percent = docker_memory(stats)
-    network_rx, network_tx = docker_network_totals(stats)
-
-    health = (state.get("Health") or {}).get("Status")
-    image_tags = getattr(container.image, "tags", None) or []
-    image_name = image_tags[0] if image_tags else config.get("Image") or container.image.short_id
-
-    return {
-        "id": container.short_id,
-        "name": container.name,
-        "image": image_name,
-        "status": container.status,
-        "running": bool(state.get("Running")),
-        "health": health,
-        "started_at": state.get("StartedAt"),
-        "finished_at": state.get("FinishedAt"),
-        "created_at": attrs.get("Created"),
-        "restart_count": int(attrs.get("RestartCount") or 0),
-        "cpu_percent": docker_cpu_percent(stats),
-        "memory_used_bytes": memory_used,
-        "memory_limit_bytes": memory_limit,
-        "memory_percent": memory_percent,
-        "network_rx_bytes": network_rx,
-        "network_tx_bytes": network_tx,
-        "ports": docker_ports(attrs),
-        "labels": config.get("Labels") or {},
-    }
-
-
-def docker_snapshot():
-    client = docker_client()
-    try:
-        info = client.info()
-        containers = [
-            docker_container_summary(container)
-            for container in client.containers.list(all=True)
-        ]
-    finally:
-        client.close()
-
-    containers.sort(key=lambda item: (not item["running"], item["name"].lower()))
-    running = sum(1 for item in containers if item["running"])
-    healthy = sum(1 for item in containers if item["health"] == "healthy")
-    unhealthy = sum(1 for item in containers if item["health"] == "unhealthy")
-
-    return {
-        "available": True,
-        "engine": {
-            "name": info.get("Name"),
-            "server_version": info.get("ServerVersion"),
-            "operating_system": info.get("OperatingSystem"),
-            "architecture": info.get("Architecture"),
-            "containers_total": len(containers),
-            "containers_running": running,
-            "containers_stopped": len(containers) - running,
-            "containers_healthy": healthy,
-            "containers_unhealthy": unhealthy,
-        },
-        "containers": containers,
-        "collected_at": utc_now(),
-    }
 
 
 def parse_iperf_json(raw):
@@ -1052,8 +566,10 @@ def ports():
             "error": "Target is outside the configured subnet.",
         }), 400
 
+    safe_target = normalize_target(target)
+
     return jsonify(run_command(
-        ["nmap", "-Pn", "-T4", "--top-ports", "100", target],
+        ["nmap", "-Pn", "-T4", "--top-ports", "100", safe_target],
         timeout=45,
     ))
 
