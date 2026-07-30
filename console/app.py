@@ -15,8 +15,7 @@ from uuid import uuid4
 
 from flask import Flask, jsonify, render_template, request
 
-from beacn.database import Database, initialise_schema
-from beacn.inventory import DeviceRepository
+from beacn.database import initialise_schema
 
 try:
     from docker.errors import DockerException
@@ -32,7 +31,6 @@ from beacn.config import (
     APP_VERSION,
     COMMAND_TIMEOUT,
     DATA_DIR,
-    DB_PATH,
     IPERF_PORT,
     METRICS_INTERVAL_SECONDS,
     NETWORK_SUBNET,
@@ -67,18 +65,19 @@ from beacn.services.docker_monitor import (
     docker_snapshot,
 )
 
-app = Flask(__name__)
-scan_lock = threading.Lock()
-db_write_lock = threading.RLock()
-scan_state = {"running": False, "last_error": None}
+from beacn.runtime import (
+    database,
+    repository,
+    scan_lock,
+    db_write_lock,
+    scan_state,
+)
 
+app = Flask(__name__)
 
 def utc_now():
     return datetime.now(timezone.utc).isoformat(timespec="seconds")
 
-
-database = Database(DB_PATH)
-repository = DeviceRepository(database)
 
 
 def db():
