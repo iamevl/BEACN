@@ -566,8 +566,10 @@ def ports():
             "error": "Target is outside the configured subnet.",
         }), 400
 
+    safe_target = normalize_target(target)
+
     return jsonify(run_command(
-        ["nmap", "-Pn", "-T4", "--top-ports", "100", target],
+        ["nmap", "-Pn", "-T4", "--top-ports", "100", safe_target],
         timeout=45,
     ))
 
