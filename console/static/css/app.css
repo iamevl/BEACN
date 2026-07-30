@@ -18,7 +18,7 @@
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
-  gap: 24px;
+  gap: 32px;
   flex-wrap: wrap;
 }
 
@@ -33,24 +33,34 @@
   height: auto;
 }
 
-.scope-row {
-  display: flex;
-  align-items: center;
-  flex-wrap: wrap;
-  gap: 12px;
-  margin-top: 12px;
-}
-
 .brand-subtitle {
+  display: block;
+  margin-top: 12px;
   color: var(--muted);
   font-size: 16px;
   line-height: 1.45;
 }
 
+.header-meta {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 14px;
+  padding-top: 22px;
+}
+
+.release-badges {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
 .scope-selector {
   display: inline-flex;
   align-items: center;
-  gap: 7px;
+  gap: 8px;
   margin: 0;
 }
 
@@ -63,38 +73,44 @@
 
 .scope-selector select {
   width: auto;
-  min-width: 145px;
+  min-width: 175px;
   padding: 6px 30px 6px 10px;
   border-radius: 999px;
   font-size: 13px;
   background-color: var(--panel2);
 }
 
-.release-badges {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  flex-wrap: wrap;
-  padding-top: 22px;
-}
 @media (max-width: 600px) {
   .app-header {
     flex-direction: column;
+    gap: 20px;
   }
 
   .brand-wordmark {
     width: 230px;
   }
 
-  .scope-row {
+  .header-meta {
+    width: 100%;
+    align-items: flex-start;
+    padding-top: 0;
+  }
+
+  .release-badges {
+    justify-content: flex-start;
+  }
+
+  .scope-selector {
+    width: 100%;
     align-items: flex-start;
     flex-direction: column;
   }
 
-  .release-badges {
-    padding-top: 0;
+  .scope-selector select {
+    width: 100%;
   }
 }
+
 .output-card {
   margin-top: 16px;
 }

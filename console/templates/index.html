@@ -54,24 +54,24 @@
       alt="BEACN"
     >
 
-    <div class="scope-row">
-      <span class="brand-subtitle">
-        Infrastructure discovery, diagnostics and live device intelligence
-      </span>
-
-      <label class="scope-selector">
-        <span class="scope-label">Scope</span>
-
-        <select id="scopeSelect" aria-label="Monitored network scope">
-          <option value="{{ subnet }}">{{ subnet }}</option>
-        </select>
-      </label>
-    </div>
+    <span class="brand-subtitle">
+      Infrastructure discovery, diagnostics and live device intelligence
+    </span>
   </div>
 
-  <div class="release-badges">
-    <span class="badge">v{{ app_version }}</span>
-    <span class="badge">{{ app_stage }}</span>
+  <div class="header-meta">
+    <div class="release-badges">
+      <span class="badge">v{{ app_version }}</span>
+      <span class="badge">{{ app_stage }}</span>
+    </div>
+
+    <label class="scope-selector">
+      <span class="scope-label">Scope</span>
+
+      <select id="scopeSelect" aria-label="Monitored network scope">
+        <option value="{{ subnet }}">{{ subnet }}</option>
+      </select>
+    </label>
   </div>
 </header>
 
