@@ -586,14 +586,16 @@ def iperf():
             "error": "Target is outside the configured subnet.",
         }), 400
 
-    if not tcp_open(target, IPERF_PORT, timeout=1):
+    safe_target = normalize_target(target)
+
+    if not tcp_open(safe_target, IPERF_PORT, timeout=1):
         return jsonify({
             "ok": False,
-            "error": f"No iperf3 server detected on {target}:{IPERF_PORT}.",
+            "error": f"No iperf3 server detected on {safe_target}:{IPERF_PORT}.",
         }), 400
 
     args = [
-        "iperf3", "-c", target,
+        "iperf3", "-c", safe_target,
         "-p", str(IPERF_PORT),
         "-J", "-t", "10",
     ]
@@ -614,7 +616,7 @@ def iperf():
                      retransmits, raw_output, created_at)
                 VALUES (?, ?, ?, ?, ?, ?)
             """, (
-                target,
+                safe_target,
                 direction,
                 bits_per_second,
                 retransmits,
