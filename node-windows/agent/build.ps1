@@ -30,7 +30,9 @@ $RequiredFiles = @(
     'hardware-helper.exe',
     'iperf3.exe',
     'cygwin1.dll',
-    'config.example.json'
+    'config.example.json',
+    'cygcrypto-3.dll',
+    'cygz.dll'
 )
 
 foreach ($File in $RequiredFiles) {
