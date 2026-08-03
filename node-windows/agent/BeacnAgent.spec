@@ -11,6 +11,8 @@ a = Analysis(
         (str(project_dir / 'hardware-helper.exe'), '.'),
         (str(project_dir / 'iperf3.exe'), '.'),
         (str(project_dir / 'cygwin1.dll'), '.'),
+        (str(project_dir / 'cygcrypto-3.dll'), '.'),
+        (str(project_dir / 'cygz.dll'), '.'),
     ],
     datas=[
         (str(project_dir / 'config.example.json'), '.'),
