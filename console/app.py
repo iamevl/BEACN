@@ -133,6 +133,20 @@ def devices():
             item["agent_installed"] = device.agent_installed
         payload.append(item)
 
+    def device_ip_sort_key(item):
+        try:
+            address = ipaddress.ip_address(
+                str(item.get("ip", "")).strip()
+            )
+            return (
+                address.version,
+                int(address),
+            )
+        except ValueError:
+            return (99, 0)
+
+    payload.sort(key=device_ip_sort_key)
+
     return jsonify({
         "devices": payload,
         "scan": scan_state,
