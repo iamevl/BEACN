@@ -297,79 +297,237 @@ def network_information():
 
 
 def hardware_information():
-    temperatures = {}
-    fans = {}
+    """Return Linux hardware data using the shared BEACN hardware schema."""
 
     try:
-        temperatures = psutil.sensors_temperatures(fahrenheit=False) or {}
+        temperatures = psutil.sensors_temperatures(
+            fahrenheit=False
+        ) or {}
     except (AttributeError, OSError):
-        pass
+        temperatures = {}
 
     try:
         fans = psutil.sensors_fans() or {}
     except (AttributeError, OSError):
-        pass
+        fans = {}
+
+    try:
+        memory = psutil.virtual_memory()
+    except (AttributeError, OSError):
+        memory = None
+
+    try:
+        per_cpu_load = psutil.cpu_percent(
+            interval=0.2,
+            percpu=True,
+        ) or []
+    except (AttributeError, OSError):
+        per_cpu_load = []
+
+    try:
+        frequencies = psutil.cpu_freq(percpu=True) or []
+    except (AttributeError, OSError):
+        frequencies = []
 
     hardware = []
-    temperature_values = []
+    cpu_sensors = []
+    cpu_temperature = None
 
+    #
+    # Temperature sensors
+    #
     for group, entries in temperatures.items():
-        sensors = []
-        for index, entry in enumerate(entries):
-            value = entry.current
-            if value is None:
-                continue
-            temperature_values.append(float(value))
-            sensors.append({
-                "name": entry.label or f"Temperature {index + 1}",
-                "type": "Temperature",
-                "value": float(value),
-                "min": None,
-                "max": entry.high,
-            })
+        group_name = str(group)
+        group_lower = group_name.lower()
+        group_sensors = []
 
-        if sensors:
-            hardware.append({
-                "name": group,
-                "hardwareType": "Temperature",
-                "sensors": sensors,
-                "subHardware": [],
-            })
-
-    for group, entries in fans.items():
-        sensors = []
         for index, entry in enumerate(entries):
             if entry.current is None:
                 continue
+
+            value = float(entry.current)
+            label = entry.label or f"Temperature {index + 1}"
+
+            sensor = {
+                "name": label,
+                "type": "Temperature",
+                "value": value,
+                "minimum": None,
+                "maximum": entry.high,
+                "min": None,
+                "max": entry.high,
+            }
+
+            group_sensors.append(sensor)
+
+            is_cpu_group = (
+                "cpu" in group_lower
+                or "coretemp" in group_lower
+                or "k10temp" in group_lower
+            )
+
+            if is_cpu_group and cpu_temperature is None:
+                cpu_temperature = value
+
+        if not group_sensors:
+            continue
+
+        is_cpu_group = (
+            "cpu" in group_lower
+            or "coretemp" in group_lower
+            or "k10temp" in group_lower
+        )
+
+        if is_cpu_group:
+            for sensor in group_sensors:
+                cpu_sensors.append({
+                    **sensor,
+                    "name": (
+                        "CPU Package"
+                        if sensor["name"].startswith("Temperature")
+                        else sensor["name"]
+                    ),
+                })
+        else:
+            hardware.append({
+                "name": group_name,
+                "identifier": f"/temperature/{group_name}",
+                "type": "Temperature",
+                "hardwareType": "Temperature",
+                "sensors": group_sensors,
+                "subHardware": [],
+            })
+
+    #
+    # CPU utilisation
+    #
+    if per_cpu_load:
+        average_load = sum(per_cpu_load) / len(per_cpu_load)
+
+        cpu_sensors.append({
+            "name": "CPU Total",
+            "type": "Load",
+            "value": float(average_load),
+            "minimum": 0.0,
+            "maximum": 100.0,
+            "min": 0.0,
+            "max": 100.0,
+        })
+
+        for index, value in enumerate(per_cpu_load):
+            cpu_sensors.append({
+                "name": f"CPU Core #{index + 1}",
+                "type": "Load",
+                "value": float(value),
+                "minimum": 0.0,
+                "maximum": 100.0,
+                "min": 0.0,
+                "max": 100.0,
+            })
+
+    #
+    # CPU clock data
+    #
+    for index, frequency in enumerate(frequencies):
+        current = getattr(frequency, "current", None)
+
+        if current is None:
+            continue
+
+        minimum = getattr(frequency, "min", None)
+        maximum = getattr(frequency, "max", None)
+
+        cpu_sensors.append({
+            "name": f"CPU Core #{index + 1}",
+            "type": "Clock",
+            "value": float(current),
+            "minimum": minimum,
+            "maximum": maximum,
+            "min": minimum,
+            "max": maximum,
+        })
+
+    #
+    # CPU hardware node
+    #
+    if cpu_sensors:
+        hardware.insert(0, {
+            "name": "CPU",
+            "identifier": "/cpu/0",
+            "type": "Cpu",
+            "hardwareType": "Cpu",
+            "sensors": cpu_sensors,
+            "subHardware": [],
+        })
+
+    #
+    # Memory utilisation
+    #
+    if memory is not None:
+        hardware.append({
+            "name": "Memory",
+            "identifier": "/ram",
+            "type": "Memory",
+            "hardwareType": "Memory",
+            "sensors": [
+                {
+                    "name": "Memory",
+                    "type": "Load",
+                    "value": float(memory.percent),
+                    "minimum": 0.0,
+                    "maximum": 100.0,
+                    "min": 0.0,
+                    "max": 100.0,
+                }
+            ],
+            "subHardware": [],
+        })
+
+    #
+    # Cooling fans
+    #
+    for group, entries in fans.items():
+        sensors = []
+
+        for index, entry in enumerate(entries):
+            if entry.current is None:
+                continue
+
             sensors.append({
                 "name": entry.label or f"Fan {index + 1}",
                 "type": "Fan",
                 "value": float(entry.current),
+                "minimum": None,
+                "maximum": None,
                 "min": None,
                 "max": None,
             })
 
         if sensors:
             hardware.append({
-                "name": group,
+                "name": str(group),
+                "identifier": f"/fan/{group}",
+                "type": "FanController",
                 "hardwareType": "FanController",
                 "sensors": sensors,
                 "subHardware": [],
             })
 
-    summary = {}
-    if temperature_values:
-        summary["cpu_temperature_c"] = max(temperature_values)
-
     return {
-        "provider": "psutil",
+        "provider": "Linux Hardware Collector",
         "available": bool(hardware),
-        "error": "" if hardware else "No Linux hardware sensors were exposed by the host.",
-        "summary": summary,
+        "error": (
+            ""
+            if hardware
+            else "No Linux hardware sensors were exposed by the host."
+        ),
+        "summary": {
+            "cpuTemperatureC": cpu_temperature,
+            "cpuPowerW": None,
+        },
         "hardware": hardware,
         "timestamp": utc_now(),
     }
-
 
 def docker_client():
     if not CONFIG.get("docker_enabled", True):
@@ -637,15 +795,22 @@ class Handler(BaseHTTPRequestHandler):
             return self.send_json(200, docker_status())
 
         if path == "/health":
-            docker_payload = docker_status()
+            docker_available = bool(
+                CONFIG.get("docker_enabled", True)
+                and docker is not None
+                and os.path.exists("/var/run/docker.sock")
+            )
+
             return self.send_json(
                 200,
                 {
                     "ok": True,
                     "version": VERSION,
                     "iperf3": iperf_status(),
-                    "hardware": bool(hardware_information().get("available")),
-                    "docker": bool(docker_payload.get("available")),
+                    "hardware": bool(
+                        hardware_information().get("available")
+                    ),
+                    "docker": docker_available,
                 },
             )
 

@@ -35,7 +35,15 @@
     const dimmTemps = dimmDevices.flatMap(item =>
       sensorsFor(item, 'Temperature', /^DIMM #\d+$/i)
     );
-    const fans = Array.isArray(hardware.summary?.fans) ? hardware.summary.fans : [];
+    const fanDevices = devices.filter(item =>
+      ['fancontroller', 'fan'].includes(String(item.type || '').toLowerCase())
+    );
+
+const fans = fanDevices.flatMap(item =>
+    sensorsFor(item, 'Fan')
+);
+const primaryFan = fans.find(fan => finite(fan.value) != null) || null;
+const primaryFanRpm = finite(primaryFan?.value);
 
     const gpuCards = gpuDevices.map(gpu => {
       const load = firstSensor(gpu, 'Load', ['GPU Core', 'D3D 3D', 'GPU Total']);
@@ -68,8 +76,14 @@
         ${hardwareMetric('CPU load', cpuLoad ? `${finite(cpuLoad.value).toFixed(1)}%` : '—', 'Current utilisation', utilisationState(cpuLoad?.value))}
         ${hardwareMetric('Fastest core', fastestClock ? `${(fastestClock / 1000).toFixed(2)} GHz` : '—', `${clocks.length} clock sensors`)}
         ${hardwareMetric('Memory load', ramLoad ? `${finite(ramLoad.value).toFixed(1)}%` : '—', `${dimmDevices.length} DIMM devices`, utilisationState(ramLoad?.value))}
-        ${hardwareMetric('Cooling fans', String(fans.length), fans.length ? 'RPM sensors detected' : 'No fan sensors exposed')}
       </div>
+      ${hardwareMetric(
+  fans.length === 1 ? 'Cooling fan' : 'Cooling fans',
+  primaryFanRpm == null ? 'Not exposed' : `${primaryFanRpm.toFixed(0)} RPM`,
+  fans.length
+    ? `${fans.length} RPM sensor${fans.length === 1 ? '' : 's'} detected`
+    : 'No fan telemetry exposed'
+)}
       <div class="sensor-group">
         <h3>CPU core temperatures</h3>
         ${coreTemps.length ? `<div class="sensor-grid">${coreTemps.map(sensor => sensorCard(sensor, '°C', 80, 95)).join('')}</div>` : '<div class="empty">No individual CPU core temperatures reported.</div>'}
@@ -80,7 +94,7 @@
       </div>
       <div class="sensor-group">
         <h3>Graphics</h3>
-        ${gpuCards || '<div class="empty">No GPU hardware reported.</div>'}
+        ${gpuCards || '<div class="empty">No GPU telemetry is exposed by this platform.</div>'}
       </div>
       <div class="sensor-group">
         <h3>Fans</h3>
