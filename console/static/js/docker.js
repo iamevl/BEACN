@@ -72,7 +72,6 @@ function renderDocker(payload) {
   const count = document.getElementById('dockerCount');
 
   if (!payload?.available) {
-    count.textContent = '—';
     panel.innerHTML = `
       <div class="docker-toolbar">
         <div>
@@ -91,7 +90,6 @@ function renderDocker(payload) {
 
   const engine = payload.engine || {};
   const containers = payload.containers || [];
-  count.textContent = `${engine.containers_running || 0}/${engine.containers_total || 0}`;
 
   panel.innerHTML = `
     <div class="docker-toolbar">
@@ -133,7 +131,6 @@ async function loadDocker(force = false) {
   const panel = document.getElementById('tab-docker');
 
   if (!device) {
-    document.getElementById('dockerCount').textContent = '—';
     panel.innerHTML = '<div class="empty">Select a device.</div>';
     return;
   }

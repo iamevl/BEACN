@@ -1,3 +1,4 @@
+import time
 import json
 import threading
 from uuid import uuid4
@@ -61,9 +62,14 @@ def scan_network():
     if not scan_lock.acquire(blocking=False):
         return
 
+    scan_started = time.monotonic()
+
     scan_state["running"] = True
     scan_state["last_error"] = None
-
+    scan_state["started_at"] = utc_now()
+    scan_state["finished_at"] = None
+    scan_state["duration_seconds"] = None
+    scan_state["devices_found"] = None
     try:
         result = run_command(
             ["nmap", "-sn", "-n", NETWORK_SUBNET],
@@ -74,6 +80,8 @@ def scan_network():
             raise RuntimeError(result["stderr"] or "Network scan failed.")
 
         found = parse_nmap_discovery(result["stdout"])
+        scan_state["devices_found"] = len(found)
+
         now = utc_now()
 
         with db_write_lock:
@@ -219,6 +227,11 @@ def scan_network():
 
     finally:
         scan_state["running"] = False
+        scan_state["finished_at"] = utc_now()
+        scan_state["duration_seconds"] = round(
+            time.monotonic() - scan_started,
+            1,
+        )
         scan_lock.release()
 
 

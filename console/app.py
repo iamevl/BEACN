@@ -16,7 +16,7 @@ from uuid import uuid4
 from flask import Flask, jsonify, render_template, request
 
 from beacn.database import initialise_schema
-
+from beacn.services.health import get_health_summary
 try:
     from docker.errors import DockerException
 except ImportError:
@@ -104,6 +104,9 @@ def index():
         app_stage=APP_STAGE,
     )
 
+@app.get("/api/health")
+def api_health():
+    return jsonify(get_health_summary())
 
 @app.get("/api/devices")
 def devices():
