@@ -125,5 +125,10 @@
   window.addEventListener('resize', drawTelemetryChart);
   document.addEventListener('visibilitychange', configureLivePolling);
 
-  refreshDevices();
-  setInterval(refreshDevices, 15000);
+  async function refreshDashboard() {
+    await refreshDevices();
+    await refreshHealth();
+  }
+
+  refreshDashboard();
+  setInterval(refreshDashboard, 5000);

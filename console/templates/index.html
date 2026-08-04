@@ -74,7 +74,6 @@
     </label>
   </div>
 </header>
-
     <section class="grid metrics">
       <div class="card metric">
         <small>Online devices</small>
@@ -102,70 +101,117 @@
       </div>
     </section>
 
-    <section class="grid two">
-      <div class="card">
-        <h2>Device tools</h2>
-
-        <label for="deviceSelect">Discovered device</label>
-        <select id="deviceSelect"></select>
-
-        <div class="buttons">
-          <button id="scanBtn" class="primary">Rescan network</button>
-          <button id="refreshAgentBtn">Refresh agent</button>
-          <button id="pingBtn">Ping</button>
-          <button id="portsBtn">Scan top 100 ports</button>
-          <button id="iperfBtn">Run iperf3</button>
-          <button id="iperfReverseBtn">Run reverse iperf3</button>
-          <button id="resultsBtn">Show saved results</button>
-        </div>
-
-        <div id="status" class="status"></div>
-      </div>
-
-      <div class="card">
-        <div class="device-hero">
-          <div>
-            <h2 id="heroName">No device selected</h2>
-            <div id="heroSubtitle" class="muted">—</div>
+    <section class="card health-card" id="healthCard">
+      <div class="health-header">
+        <div class="health-heading">
+          <div
+            id="healthGreeting"
+            class="health-greeting"
+          >
+            Loading…
           </div>
 
-<div
-  id="heroStatus"
-  class="badge component-status"
-  aria-live="polite"
->
-  Unknown
-</div>
-        </div>
+          <div
+            id="healthStatus"
+            class="health-status health-status-unknown"
+            aria-live="polite"
+          >
+            <span
+              class="health-status-dot"
+              aria-hidden="true"
+            ></span>
 
-        <div class="tabs">
-          <button class="tab active" data-tab="overview">Overview</button>
-          <button class="tab" data-tab="storage">Storage</button>
-          <button class="tab" data-tab="network">Network</button>
-          <button class="tab" data-tab="performance">Performance</button>
-          <button class="tab" data-tab="hardware">Hardware</button>
-          <button class="tab" data-tab="services">Services</button>
-          <button class="tab" data-tab="docker">Docker</button>
-          <button class="tab" data-tab="history">History</button>
-        </div>
-
-        <section id="tab-overview" class="tab-panel active"></section>
-        <section id="tab-storage" class="tab-panel"></section>
-        <section id="tab-network" class="tab-panel"></section>
-        <section id="tab-performance" class="tab-panel"></section>
-        <section id="tab-hardware" class="tab-panel"></section>
-        <section id="tab-services" class="tab-panel"></section>
-
-        <section id="tab-docker" class="tab-panel">
-          <div class="empty">
-            Docker information has not been loaded yet.
+            <span class="health-status-label">
+              Checking network…
+            </span>
           </div>
-        </section>
 
-        <section id="tab-history" class="tab-panel"></section>
+          <div
+            class="muted health-summary"
+            id="healthSummary"
+          ></div>
+        </div>
+
+        <div class="health-score" id="healthScoreBlock">
+          <span class="health-score-label">Score</span>
+
+          <div class="health-score-value">
+            <strong id="healthScore">--</strong>
+            <small>/100</small>
+          </div>
+        </div>
       </div>
+
+      <div
+        id="healthChecks"
+        class="health-checks"
+      >
+        Initialising network health, please wait...
+      </div>
+
     </section>
 
+    <section class="card device-tools-card">
+      <h2>Device tools</h2>
+
+      <label for="deviceSelect">Discovered device</label>
+      <select id="deviceSelect"></select>
+
+      <div class="buttons">
+        <button id="scanBtn" class="primary">Rescan network</button>
+        <button id="refreshAgentBtn">Refresh agent</button>
+        <button id="pingBtn">Ping</button>
+        <button id="portsBtn">Scan top 100 ports</button>
+        <button id="iperfBtn">Run iperf3</button>
+        <button id="iperfReverseBtn">Run reverse iperf3</button>
+        <button id="resultsBtn">Show saved results</button>
+      </div>
+
+      <div id="status" class="status"></div>
+    </section>
+
+    <section class="card device-details-card">
+      <div class="device-hero">
+        <div>
+          <h2 id="heroName">No device selected</h2>
+          <div id="heroSubtitle" class="muted">—</div>
+        </div>
+
+        <div
+          id="heroStatus"
+          class="badge component-status"
+          aria-live="polite"
+        >
+          Unknown
+        </div>
+      </div>
+
+      <div class="tabs">
+        <button class="tab active" data-tab="overview">Overview</button>
+        <button class="tab" data-tab="storage">Storage</button>
+        <button class="tab" data-tab="network">Network</button>
+        <button class="tab" data-tab="performance">Performance</button>
+        <button class="tab" data-tab="hardware">Hardware</button>
+        <button class="tab" data-tab="services">Services</button>
+        <button class="tab" data-tab="docker">Docker</button>
+        <button class="tab" data-tab="history">History</button>
+      </div>
+
+      <section id="tab-overview" class="tab-panel active"></section>
+      <section id="tab-storage" class="tab-panel"></section>
+      <section id="tab-network" class="tab-panel"></section>
+      <section id="tab-performance" class="tab-panel"></section>
+      <section id="tab-hardware" class="tab-panel"></section>
+      <section id="tab-services" class="tab-panel"></section>
+
+      <section id="tab-docker" class="tab-panel">
+        <div class="empty">
+          Docker information has not been loaded yet.
+        </div>
+      </section>
+
+      <section id="tab-history" class="tab-panel"></section>
+    </section>
     <section class="card output-card">
       <div class="toolbar">
         <h2>Output</h2>
@@ -181,6 +227,7 @@
   <script src="{{ url_for('static', filename='js/charts.js') }}?v={{ app_version }}"></script>
   <script src="{{ url_for('static', filename='js/devices.js') }}?v={{ app_version }}"></script>
   <script src="{{ url_for('static', filename='js/docker.js') }}?v={{ app_version }}"></script>
+  <script src="{{ url_for('static', filename='js/health.js') }}?v={{ app_version }}"></script>
   <script src="{{ url_for('static', filename='js/network.js') }}?v={{ app_version }}"></script>
 </body>
 </html>

@@ -14,4 +14,8 @@ db_write_lock = threading.RLock()
 scan_state = {
     "running": False,
     "last_error": None,
+    "started_at": None,
+    "finished_at": None,
+    "duration_seconds": None,
+    "devices_found": None,
 }

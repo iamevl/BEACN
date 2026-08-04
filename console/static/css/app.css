@@ -553,3 +553,230 @@
         width: 100%;
       }
     }
+}
+.health-card {
+  margin-top: 24px;
+  margin-bottom: 0;
+}
+
+.health-card + .grid.two {
+  margin-top: 24px;
+}
+
+.health-header {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: start;
+  column-gap: 40px;
+}
+
+.health-heading {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+}
+
+.health-greeting {
+  margin: 0 0 10px;
+  color: var(--beacn-text-muted, #b7c7e8);
+  font-size: 1rem;
+  line-height: 1.25;
+}
+
+.health-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 12px;
+  margin: 0;
+  font-size: clamp(1.7rem, 2.5vw, 2.25rem);
+  font-weight: 750;
+  line-height: 1.1;
+}
+
+.health-status-dot {
+  width: 22px;
+  height: 22px;
+  flex: 0 0 22px;
+  border-radius: 50%;
+  background: #64748b;
+}
+
+.health-status-green {
+  color: #5ee5a6;
+}
+
+.health-status-green .health-status-dot {
+  background: #5ee5a6;
+  box-shadow: 0 0 0 5px rgb(94 229 166 / 14%);
+}
+
+.health-status-amber {
+  color: #f6c85f;
+}
+
+.health-status-amber .health-status-dot {
+  background: #f6c85f;
+  box-shadow: 0 0 0 5px rgb(246 200 95 / 14%);
+}
+
+.health-status-red {
+  color: #ff7272;
+}
+
+.health-status-red .health-status-dot {
+  background: #ff7272;
+  box-shadow: 0 0 0 5px rgb(255 114 114 / 14%);
+}
+
+.health-status-unknown {
+  color: #94a3b8;
+}
+
+.health-summary {
+  margin: 24px 0 0;
+  font-size: 1.05rem;
+  line-height: 1.4;
+}
+
+.health-score {
+  --health-score-colour: #94a3b8;
+
+  display: flex;
+  align-items: baseline;
+  justify-content: flex-end;
+  gap: 12px;
+  padding-top: 4px;
+  color: var(--health-score-colour);
+  white-space: nowrap;
+}
+
+.health-score-label {
+  color: var(--beacn-text-muted, #b7c7e8);
+  font-size: 1rem;
+  font-weight: 600;
+}
+
+.health-score-value {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 4px;
+}
+
+.health-score-value strong {
+  color: var(--health-score-colour);
+  font-size: clamp(2.4rem, 4vw, 4rem);
+  font-weight: 800;
+  line-height: 1;
+}
+
+.health-score-value small {
+  color: var(--health-score-colour);
+  font-size: 1rem;
+}
+
+.health-checks {
+  margin-top: 30px;
+}
+
+.health-check {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  margin-bottom: 10px;
+}
+
+.health-check:last-child {
+  margin-bottom: 26px;
+}
+
+@media (max-width: 760px) {
+  .health-header {
+    grid-template-columns: 1fr;
+    row-gap: 22px;
+  }
+
+  .health-score {
+    justify-content: flex-start;
+    padding-top: 0;
+  }
+}
+
+.device-tools-card,
+.device-details-card {
+  margin-top: 24px;
+}
+
+.device-tools-card .buttons {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+.device-tools-card select {
+  width: 100%;
+}
+
+@media (max-width: 1000px) {
+  .device-tools-card .buttons {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 620px) {
+  .device-tools-card .buttons {
+    grid-template-columns: 1fr;
+  }
+}
+/* Main dashboard section spacing */
+.health-card,
+.device-tools-card,
+.device-details-card,
+.output-card {
+  margin-top: 24px;
+}
+
+/* Ensure stacked full-width cards never visually touch */
+.device-tools-card + .device-details-card,
+.device-details-card + .output-card {
+  margin-top: 24px;
+}
+
+.device-tools-card .status:empty {
+  display: none;
+}
+
+.device-tools-card .buttons {
+  margin-top: 16px;
+}
+
+.discovery-spinner {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  margin-left: 4px;
+  flex: 0 0 22px;
+}
+
+.discovery-spinner img {
+  width: 20px;
+  height: 20px;
+  display: block;
+  animation: beacnDiscoverySpin 1.4s linear infinite;
+  filter: drop-shadow(0 0 5px rgb(94 229 166 / 30%));
+}
+
+@keyframes beacnDiscoverySpin {
+  from {
+    transform: rotate(0deg);
+  }
+
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .discovery-spinner img {
+    animation: none;
+  }
+}
