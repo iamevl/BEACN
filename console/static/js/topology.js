@@ -36,7 +36,14 @@ function topologyDeviceSubtitle(device) {
         device.device_type || 'unknown'
     );
 
-    return `${presentation.label} · ${device.ip}`;
+    const connection =
+        device.connection_source === 'manual'
+            ? ` · ${device.connection_method}`
+            : '';
+
+    return (
+        `${presentation.label} · ${device.ip}${connection}`
+    );
 }
 
 
@@ -135,6 +142,14 @@ function buildTopologyModel() {
         device => !infrastructureIps.has(device.ip)
     );
 
+    const infrastructureByIp = new Map(
+        [
+            ...routers,
+            ...switches,
+            ...accessPoints
+        ].map(device => [device.ip, device])
+    );
+
     const branches = [];
 
     switches.forEach(device => {
@@ -154,7 +169,15 @@ function buildTopologyModel() {
     });
 
     branches.push({
-        device: primaryRouter,
+        device: {
+            ip: "",
+            hostname: "Direct or unassigned",
+            display_name: "Direct or unassigned",
+            device_type: "unknown",
+            is_online: 1,
+            synthetic: true,
+            synthetic_role: "direct"
+        },
         role: 'router',
         clients: []
     });
@@ -176,6 +199,26 @@ function buildTopologyModel() {
 
     clients.forEach(device => {
         const type = device.device_type || 'unknown';
+
+        const manualParentIp =
+            device.connection_source === 'manual'
+                ? device.connection_parent_ip
+                : '';
+
+        if (
+            manualParentIp &&
+            infrastructureByIp.has(manualParentIp)
+        ) {
+            const parentBranch = branches.find(
+                branch =>
+                    branch.device.ip === manualParentIp
+            );
+
+            if (parentBranch) {
+                parentBranch.clients.push(device);
+                return;
+            }
+        }
 
         if (
             TOPOLOGY_WIRED_TYPES.has(type) &&
@@ -312,12 +355,12 @@ function topologyBranchTitle(branch) {
         return 'Wireless critical path';
     }
 
-    return 'Direct critical path';
+    return 'Direct or unassigned';
 }
 
 
-function renderTopologyBranch(branch) {
-    const clients = [...branch.clients].sort(
+function topologyClientList(clients) {
+    const sortedClients = [...clients].sort(
         (left, right) => {
             const onlineDifference =
                 Number(right.is_online) -
@@ -333,27 +376,43 @@ function renderTopologyBranch(branch) {
         }
     );
 
-    const branchNode = branch.device.synthetic
+    if (!sortedClients.length) {
+        return `
+            <div class="topology-empty-branch">
+              No connected devices assigned.
+            </div>
+        `;
+    }
+
+    return sortedClients
+        .map(device => topologyDeviceButton(device))
+        .join('');
+}
+
+
+function renderInfrastructureColumn(branch) {
+    const infrastructureNode = branch.device.synthetic
         ? `
             <div
               class="
                 topology-node
                 topology-device-node
                 topology-synthetic-node
+                topology-direct-node
                 online
               "
-              style="--topology-node-colour:#22d3ee"
+              style="--topology-node-colour:#64748b"
             >
               <span
                 class="topology-node-icon"
                 aria-hidden="true"
               >
-                🛜
+                ↳
               </span>
 
               <span class="topology-node-copy">
-                <strong>Network gateway</strong>
-                <small>Router not yet identified</small>
+                <strong>Direct or unassigned</strong>
+                <small>No intermediary has been identified</small>
               </span>
             </div>
           `
@@ -363,38 +422,15 @@ function renderTopologyBranch(branch) {
         );
 
     return `
-        <section class="topology-branch">
-          <div class="topology-branch-heading">
-            <span>${esc(topologyBranchTitle(branch))}</span>
-            <strong>${clients.length}</strong>
+        <section class="topology-infrastructure-column">
+          <div class="topology-infrastructure-root">
+            ${infrastructureNode}
           </div>
 
-          <div class="topology-branch-root">
-            ${branchNode}
-          </div>
+          <div class="topology-infrastructure-line"></div>
 
-          <div class="topology-branch-line"></div>
-
-          <div class="topology-client-grid">
-            ${
-                clients.length
-                    ? clients
-                        .map(device =>
-                            topologyDeviceButton(device)
-                        )
-                        .join('')
-                    : branch.focusedRoot
-                      ? `
-                          <div class="topology-path-end">
-                            Selected infrastructure node
-                          </div>
-                        `
-                      : `
-                          <div class="topology-empty-branch">
-                            No devices assigned to this branch.
-                          </div>
-                        `
-            }
+          <div class="topology-client-stack">
+            ${topologyClientList(branch.clients)}
           </div>
         </section>
     `;
@@ -402,6 +438,7 @@ function renderTopologyBranch(branch) {
 
 
 function bindTopologyNodes() {
+
     document
         .querySelectorAll('[data-topology-ip]')
         .forEach(node => {
@@ -535,6 +572,7 @@ function refreshTopology() {
 
         <div class="
           topology-map
+          topology-map-hierarchical
           ${model.focused ? 'topology-map-focused' : ''}
         ">
           <div class="topology-internet-row">
@@ -550,12 +588,12 @@ function refreshTopology() {
             ${router}
           </div>
 
-          <div class="topology-trunk-line"></div>
+          <div class="topology-router-to-infrastructure"></div>
 
-          <div class="topology-branch-grid">
+          <div class="topology-infrastructure-grid">
             ${
                 model.branches
-                    .map(renderTopologyBranch)
+                    .map(renderInfrastructureColumn)
                     .join('')
             }
           </div>

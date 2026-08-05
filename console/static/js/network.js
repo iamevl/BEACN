@@ -126,6 +126,12 @@
   const identityDeviceType =
     document.getElementById('identityDeviceType');
 
+  const identityConnectionMethod =
+    document.getElementById('identityConnectionMethod');
+
+  const identityConnectionParent =
+    document.getElementById('identityConnectionParent');
+
   const identityEditorTarget =
     document.getElementById('identityEditorTarget');
 
@@ -142,6 +148,89 @@
   }
 
 
+  function infrastructureDevicesForIdentity() {
+    return devices
+      .filter(device =>
+        ['router', 'switch', 'access_point'].includes(
+          device.device_type
+        )
+      )
+      .sort((left, right) =>
+        (
+          left.display_name ||
+          left.hostname ||
+          left.ip
+        ).localeCompare(
+          right.display_name ||
+          right.hostname ||
+          right.ip
+        )
+      );
+  }
+
+
+  function renderIdentityConnectionParents(
+    selectedParent = ''
+  ) {
+    const currentDevice = selected();
+
+    const infrastructure =
+      infrastructureDevicesForIdentity()
+        .filter(device =>
+          device.ip !== currentDevice?.ip
+        );
+
+    identityConnectionParent.innerHTML = `
+      <option value="">
+        Select infrastructure device
+      </option>
+
+      ${infrastructure.map(device => {
+        const presentation =
+          deviceTypeDetails(
+            device.device_type || 'unknown'
+          );
+
+        const name =
+          device.display_name ||
+          device.hostname ||
+          device.ip;
+
+        return `
+          <option value="${esc(device.ip)}">
+            ${presentation.icon}
+            ${esc(name)}
+            · ${esc(presentation.label)}
+            · ${esc(device.ip)}
+          </option>
+        `;
+      }).join('')}
+    `;
+
+    if (
+      selectedParent &&
+      infrastructure.some(
+        device => device.ip === selectedParent
+      )
+    ) {
+      identityConnectionParent.value =
+        selectedParent;
+    }
+  }
+
+
+  function updateIdentityConnectionState() {
+    const automatic =
+      identityConnectionMethod.value === 'automatic';
+
+    identityConnectionParent.disabled = automatic;
+
+    if (automatic) {
+      identityConnectionParent.value = '';
+    }
+  }
+
+
   function openIdentityEditor() {
     const device = selected();
 
@@ -154,6 +243,15 @@
 
     identityDeviceType.value =
       device.device_type || 'unknown';
+
+    identityConnectionMethod.value =
+      device.connection_method || 'automatic';
+
+    renderIdentityConnectionParents(
+      device.connection_parent_ip || ''
+    );
+
+    updateIdentityConnectionState();
 
     identityEditorTarget.textContent =
       `${device.hostname || device.ip} · ${device.ip}`;
@@ -208,7 +306,11 @@
             display_name:
               identityDisplayName.value.trim(),
             device_type:
-              identityDeviceType.value
+              identityDeviceType.value,
+            connection_method:
+              identityConnectionMethod.value,
+            connection_parent_ip:
+              identityConnectionParent.value
           })
         }
       );
@@ -242,6 +344,11 @@
 
   document.getElementById('editIdentityBtn')
     .addEventListener('click', openIdentityEditor);
+
+  identityConnectionMethod.addEventListener(
+    'change',
+    updateIdentityConnectionState
+  );
 
   document.getElementById('cancelIdentityBtn')
     .addEventListener('click', closeIdentityEditor);

@@ -121,7 +121,8 @@ def devices():
                 agent_available, agent_version, agent_hostname,
                 cpu_percent, memory_percent, uptime_seconds,
                 agent_last_seen, os_name, os_version, device_type,
-                device_type_source
+                device_type_source, connection_method,
+                connection_parent_ip, connection_source
             FROM devices
             ORDER BY is_online DESC, ip
         """).fetchall()
@@ -246,6 +247,14 @@ def update_device_identity(target):
         payload.get("device_type", "")
     ).strip().lower()
 
+    connection_method = str(
+        payload.get("connection_method", "automatic")
+    ).strip().lower()
+
+    connection_parent_ip = str(
+        payload.get("connection_parent_ip", "")
+    ).strip()
+
     if len(display_name) > 100:
         return jsonify({
             "ok": False,
@@ -256,6 +265,34 @@ def update_device_identity(target):
         return jsonify({
             "ok": False,
             "error": "Unsupported device type.",
+        }), 400
+
+    allowed_connection_methods = {
+        "automatic",
+        "wired",
+        "wireless",
+        "unknown",
+    }
+
+    if connection_method not in allowed_connection_methods:
+        return jsonify({
+            "ok": False,
+            "error": "Unsupported connection method.",
+        }), 400
+
+    if connection_method == "automatic":
+        connection_parent_ip = ""
+
+    if connection_parent_ip and not valid_target(connection_parent_ip):
+        return jsonify({
+            "ok": False,
+            "error": "Invalid parent device.",
+        }), 400
+
+    if connection_parent_ip == target:
+        return jsonify({
+            "ok": False,
+            "error": "A device cannot connect through itself.",
         }), 400
 
     with db_write_lock:
@@ -271,15 +308,55 @@ def update_device_identity(target):
                     "error": "Device not found.",
                 }), 404
 
+            if connection_parent_ip:
+                parent = conn.execute("""
+                    SELECT
+                        ip,
+                        device_type
+                    FROM devices
+                    WHERE ip = ?
+                """, (
+                    connection_parent_ip,
+                )).fetchone()
+
+                if not parent:
+                    return jsonify({
+                        "ok": False,
+                        "error": "Parent device was not found.",
+                    }), 400
+
+                if parent["device_type"] not in {
+                    "router",
+                    "switch",
+                    "access_point",
+                }:
+                    return jsonify({
+                        "ok": False,
+                        "error": (
+                            "Parent must be a router, switch, "
+                            "or access point."
+                        ),
+                    }), 400
+
             conn.execute("""
                 UPDATE devices
                 SET display_name = ?,
                     device_type = ?,
-                    device_type_source = 'manual'
+                    device_type_source = 'manual',
+                    connection_method = ?,
+                    connection_parent_ip = NULLIF(?, ''),
+                    connection_source = CASE
+                        WHEN ? = 'automatic'
+                        THEN 'inferred'
+                        ELSE 'manual'
+                    END
                 WHERE ip = ?
             """, (
                 display_name,
                 device_type,
+                connection_method,
+                connection_parent_ip,
+                connection_method,
                 target,
             ))
 
@@ -291,7 +368,10 @@ def update_device_identity(target):
                     hostname,
                     display_name,
                     device_type,
-                    device_type_source
+                    device_type_source,
+                    connection_method,
+                    connection_parent_ip,
+                    connection_source
                 FROM devices
                 WHERE ip = ?
                 """,

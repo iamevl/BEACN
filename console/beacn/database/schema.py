@@ -11,6 +11,9 @@ DEVICE_COLUMN_MIGRATIONS = {
     "os_version": "TEXT",
     "device_type": "TEXT",
     "device_type_source": "TEXT",
+    "connection_method": "TEXT",
+    "connection_parent_ip": "TEXT",
+    "connection_source": "TEXT",
     "agent_available": "INTEGER NOT NULL DEFAULT 0",
     "agent_version": "TEXT",
     "agent_hostname": "TEXT",
@@ -117,6 +120,22 @@ def initialise_schema(conn: sqlite3.Connection) -> None:
 
     _add_missing_columns(conn, "devices", DEVICE_COLUMN_MIGRATIONS)
     _add_missing_columns(conn, "telemetry_history", TELEMETRY_COLUMN_MIGRATIONS)
+
+    conn.execute("""
+        UPDATE devices
+        SET connection_method = COALESCE(
+                NULLIF(connection_method, ''),
+                'automatic'
+            ),
+            connection_source = COALESCE(
+                NULLIF(connection_source, ''),
+                'inferred'
+            )
+        WHERE connection_method IS NULL
+           OR connection_method = ''
+           OR connection_source IS NULL
+           OR connection_source = ''
+    """)
 
     conn.execute("""
         UPDATE devices

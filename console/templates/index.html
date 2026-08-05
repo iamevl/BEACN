@@ -239,6 +239,16 @@
         </div>
       </div>
 
+      <div class="topology-edit-hint">
+        <span aria-hidden="true">ⓘ</span>
+
+        <span>
+          Connections are inferred unless manually assigned using
+          <strong>Edit identity</strong>.
+        </span>
+
+      </div>
+
       <div
         class="topology-stage"
         id="topologyStage"
@@ -337,7 +347,44 @@
               <option value="ups">🔋 UPS</option>
             </select>
           </label>
+
+          <label>
+            <span>Connection method</span>
+
+            <select id="identityConnectionMethod">
+              <option value="automatic">
+                Automatic inference
+              </option>
+
+              <option value="wired">
+                Wired
+              </option>
+
+              <option value="wireless">
+                Wireless
+              </option>
+
+              <option value="unknown">
+                Unknown
+              </option>
+            </select>
+          </label>
+
+          <label>
+            <span>Connected through</span>
+
+            <select id="identityConnectionParent">
+              <option value="">
+                Select infrastructure device
+              </option>
+            </select>
+          </label>
         </div>
+
+        <p class="identity-connection-help">
+          Automatic connections are inferred. Wired or wireless
+          assignments are retained and override topology inference.
+        </p>
 
         <div class="identity-editor-actions">
           <button

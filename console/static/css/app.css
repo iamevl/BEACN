@@ -1601,3 +1601,517 @@ button.topology-node:hover {
     width: 100%;
   }
 }
+
+
+/* Manual Topology Connections */
+
+.identity-connection-help {
+  margin: 12px 0 0;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.identity-editor-grid select:disabled {
+  opacity: .48;
+  cursor: not-allowed;
+}
+
+.topology-edit-hint {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 16px;
+  padding: 10px 12px;
+  border: 1px solid rgb(96 165 250 / 24%);
+  border-radius: 11px;
+  background: rgb(59 130 246 / 6%);
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.topology-edit-hint > span:first-child {
+  color: var(--info);
+  font-size: 16px;
+}
+
+.topology-edit-hint > span:nth-child(2) {
+  min-width: 0;
+  flex: 1;
+}
+
+.topology-edit-hint strong {
+  color: var(--text);
+}
+
+@media (max-width: 700px) {
+  .topology-edit-hint {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+}
+
+
+/* Neutral Direct Topology Branch */
+
+.topology-direct-node {
+  border-style: dashed;
+  opacity: .82;
+}
+
+.topology-direct-node .topology-node-icon {
+  color: var(--muted);
+  font-size: 22px;
+}
+
+.topology-direct-node .topology-node-status {
+  display: none;
+}
+
+
+/* Strict Hierarchical Topology */
+
+.topology-map-hierarchical {
+  min-width: 880px;
+}
+
+.topology-router-to-infrastructure {
+  position: relative;
+  height: 34px;
+}
+
+.topology-router-to-infrastructure::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 50%;
+  width: 2px;
+  height: 18px;
+  transform: translateX(-50%);
+  background: var(--border);
+}
+
+.topology-router-to-infrastructure::after {
+  content: "";
+  position: absolute;
+  left: 6%;
+  right: 6%;
+  bottom: 0;
+  height: 1px;
+  background: var(--border);
+}
+
+.topology-infrastructure-grid {
+  display: grid;
+  grid-template-columns:
+    repeat(auto-fit, minmax(260px, 1fr));
+  gap: 16px;
+  align-items: start;
+}
+
+.topology-infrastructure-column {
+  position: relative;
+  min-width: 0;
+}
+
+.topology-infrastructure-column::before {
+  content: "";
+  position: absolute;
+  top: -16px;
+  left: 50%;
+  width: 1px;
+  height: 16px;
+  background: var(--border);
+}
+
+.topology-infrastructure-root {
+  display: flex;
+  justify-content: center;
+}
+
+.topology-infrastructure-root .topology-node {
+  width: 100%;
+}
+
+.topology-infrastructure-line {
+  width: 1px;
+  height: 18px;
+  margin: 0 auto;
+  background: var(--border);
+}
+
+.topology-client-stack {
+  display: grid;
+  gap: 8px;
+  padding: 12px;
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  background: color-mix(
+    in srgb,
+    var(--panel2) 70%,
+    transparent
+  );
+}
+
+.topology-map-focused
+.topology-router-to-infrastructure::before,
+.topology-map-focused
+.topology-router-to-infrastructure::after,
+.topology-map-focused
+.topology-infrastructure-column::before,
+.topology-map-focused
+.topology-infrastructure-line {
+  background: color-mix(
+    in srgb,
+    var(--accent) 58%,
+    var(--border)
+  );
+}
+
+@media (max-width: 760px) {
+  .topology-map-hierarchical {
+    min-width: 720px;
+  }
+}
+
+
+/* Topology Infrastructure Tier Emphasis */
+
+.topology-router-to-infrastructure {
+  height: 44px;
+}
+
+.topology-router-to-infrastructure::before {
+  width: 3px;
+  height: 24px;
+  background: linear-gradient(
+    to bottom,
+    var(--accent),
+    color-mix(
+      in srgb,
+      var(--accent) 55%,
+      var(--border)
+    )
+  );
+  box-shadow: 0 0 10px rgb(103 232 200 / 22%);
+}
+
+.topology-router-to-infrastructure::after {
+  left: 4%;
+  right: 4%;
+  height: 2px;
+  background: color-mix(
+    in srgb,
+    var(--accent) 42%,
+    var(--border)
+  );
+  box-shadow: 0 0 8px rgb(103 232 200 / 12%);
+}
+
+.topology-infrastructure-column::before {
+  top: -20px;
+  width: 2px;
+  height: 20px;
+  background: color-mix(
+    in srgb,
+    var(--accent) 48%,
+    var(--border)
+  );
+}
+
+.topology-infrastructure-root {
+  position: relative;
+  z-index: 1;
+}
+
+.topology-infrastructure-root::after {
+  content: "Infrastructure";
+  position: absolute;
+  left: 14px;
+  bottom: -11px;
+  padding: 2px 7px;
+  border: 1px solid color-mix(
+    in srgb,
+    var(--accent) 22%,
+    var(--border)
+  );
+  border-radius: 999px;
+  background: var(--panel);
+  color: var(--muted);
+  font-size: 9px;
+  font-weight: 700;
+  line-height: 1.2;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+}
+
+.topology-infrastructure-root
+.topology-infrastructure-node {
+  min-height: 78px;
+  border-width: 2px;
+  border-color: color-mix(
+    in srgb,
+    var(--topology-node-colour) 68%,
+    var(--border)
+  );
+  background: linear-gradient(
+    145deg,
+    color-mix(
+      in srgb,
+      var(--topology-node-colour) 14%,
+      var(--panel2)
+    ),
+    var(--panel)
+  );
+  box-shadow:
+    0 8px 18px rgb(0 0 0 / 10%),
+    inset 0 1px 0 rgb(255 255 255 / 3%);
+}
+
+.topology-infrastructure-root
+.topology-infrastructure-node
+.topology-node-icon {
+  width: 44px;
+  height: 44px;
+  border: 1px solid color-mix(
+    in srgb,
+    var(--topology-node-colour) 40%,
+    transparent
+  );
+  font-size: 23px;
+}
+
+.topology-infrastructure-root
+.topology-infrastructure-node
+.topology-node-copy strong {
+  font-size: 15px;
+}
+
+.topology-infrastructure-root
+.topology-infrastructure-node
+.topology-node-copy small {
+  margin-top: 4px;
+  font-size: 12px;
+}
+
+.topology-infrastructure-line {
+  position: relative;
+  width: 3px;
+  height: 28px;
+  background: linear-gradient(
+    to bottom,
+    color-mix(
+      in srgb,
+      var(--accent) 58%,
+      var(--border)
+    ),
+    var(--border)
+  );
+}
+
+.topology-infrastructure-line::after {
+  content: "";
+  position: absolute;
+  left: 50%;
+  bottom: 0;
+  width: 18px;
+  height: 2px;
+  transform: translateX(-50%);
+  background: var(--border);
+}
+
+.topology-client-stack {
+  position: relative;
+  padding-top: 24px;
+  background: color-mix(
+    in srgb,
+    var(--panel2) 52%,
+    transparent
+  );
+}
+
+.topology-client-stack::before {
+  content: "Connected devices";
+  position: absolute;
+  top: 7px;
+  left: 12px;
+  color: var(--muted);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+}
+
+.topology-client-stack .topology-node {
+  background: color-mix(
+    in srgb,
+    var(--topology-node-colour) 5%,
+    var(--panel)
+  );
+}
+
+.topology-client-stack .topology-node:hover {
+  transform: translateX(2px);
+}
+
+.topology-map-focused
+.topology-router-to-infrastructure::before,
+.topology-map-focused
+.topology-router-to-infrastructure::after,
+.topology-map-focused
+.topology-infrastructure-column::before,
+.topology-map-focused
+.topology-infrastructure-line {
+  background-color: var(--accent);
+  box-shadow: 0 0 10px rgb(103 232 200 / 18%);
+}
+
+@media (max-width: 760px) {
+  .topology-infrastructure-root::after {
+    display: none;
+  }
+}
+
+
+/* Continuous Router Infrastructure Bus */
+
+/*
+ * Extend the router trunk all the way to the horizontal
+ * infrastructure bus. The previous 24px height left a gap
+ * inside the 44px connector area.
+ */
+.topology-router-to-infrastructure::before {
+  top: 0;
+  bottom: 0;
+  width: 3px;
+  height: auto;
+  transform: translateX(-50%);
+  background: linear-gradient(
+    to bottom,
+    var(--accent),
+    color-mix(
+      in srgb,
+      var(--accent) 62%,
+      var(--border)
+    )
+  );
+  box-shadow:
+    0 0 10px rgb(103 232 200 / 22%);
+}
+
+/*
+ * Make the shared horizontal bus crisp, straight and visibly
+ * connected to every infrastructure drop.
+ */
+.topology-router-to-infrastructure::after {
+  left: 4%;
+  right: 4%;
+  bottom: 0;
+  height: 3px;
+  border-radius: 999px;
+  background: color-mix(
+    in srgb,
+    var(--accent) 58%,
+    var(--border)
+  );
+  box-shadow:
+    0 0 8px rgb(103 232 200 / 16%);
+}
+
+/*
+ * Each switch/AP column begins immediately beneath the bus.
+ * The extra pixel overlap prevents browser sub-pixel gaps.
+ */
+.topology-infrastructure-column::before {
+  top: -19px;
+  width: 2px;
+  height: 20px;
+  background: color-mix(
+    in srgb,
+    var(--accent) 58%,
+    var(--border)
+  );
+  box-shadow:
+    0 0 7px rgb(103 232 200 / 14%);
+}
+
+/*
+ * Keep the router trunk visually above the bus at the junction,
+ * avoiding a faint seam where the pseudo-elements cross.
+ */
+.topology-router-to-infrastructure::before {
+  z-index: 2;
+}
+
+.topology-router-to-infrastructure::after {
+  z-index: 1;
+}
+
+/*
+ * Focus mode uses the same continuous geometry, only brighter.
+ */
+.topology-map-focused
+.topology-router-to-infrastructure::before,
+.topology-map-focused
+.topology-router-to-infrastructure::after,
+.topology-map-focused
+.topology-infrastructure-column::before {
+  background: var(--accent);
+  box-shadow:
+    0 0 11px rgb(103 232 200 / 24%);
+}
+
+
+/* Align Infrastructure Bus Above Nodes */
+
+/*
+ * Raise the shared horizontal bus above the infrastructure cards.
+ * The remaining 20px becomes the vertical drop into each node.
+ */
+.topology-router-to-infrastructure::after {
+  bottom: 20px;
+}
+
+/*
+ * End the router trunk precisely at the raised horizontal bus.
+ */
+.topology-router-to-infrastructure::before {
+  top: 0;
+  bottom: 20px;
+  height: auto;
+}
+
+/*
+ * Infrastructure drops begin at the raised bus and finish at
+ * the top edge of their respective cards.
+ */
+.topology-infrastructure-column::before {
+  top: -20px;
+  height: 20px;
+}
+
+/*
+ * Ensure the bus and vertical drops overlap by one pixel,
+ * preventing faint seams caused by browser sub-pixel rendering.
+ */
+.topology-router-to-infrastructure::after {
+  height: 3px;
+}
+
+.topology-infrastructure-column::before {
+  width: 2px;
+  z-index: 2;
+}
+
+/*
+ * Keep focused topology geometry identical, only brighter.
+ */
+.topology-map-focused
+.topology-router-to-infrastructure::before,
+.topology-map-focused
+.topology-router-to-infrastructure::after,
+.topology-map-focused
+.topology-infrastructure-column::before {
+  background: var(--accent);
+}
