@@ -205,6 +205,41 @@ def operating_system_information():
     }
 
 
+def system_model():
+    """Return the host hardware model when Linux exposes one."""
+    model_path = Path("/proc/device-tree/model")
+
+    if model_path.exists():
+        return model_path.read_text(
+            encoding="utf-8",
+            errors="replace",
+        ).strip().strip("\x00")
+
+    return ""
+
+
+def identity_information():
+    """Return the canonical BEACN identity contract for Linux."""
+    os_info = operating_system_information()
+    model = system_model()
+
+    is_raspberry_pi = "raspberry pi" in model.lower()
+
+    return {
+        "platform": "Linux",
+        "os_name": os_info.get("product_name", ""),
+        "os_version": os_info.get("display_version", ""),
+        "architecture": os_info.get("architecture", ""),
+        "manufacturer": "Raspberry Pi" if is_raspberry_pi else "",
+        "model": model,
+        "device_type": (
+            "raspberry_pi"
+            if is_raspberry_pi
+            else "computer"
+        ),
+    }
+
+
 def cpu_model():
     cpuinfo = Path("/proc/cpuinfo")
     if cpuinfo.exists():
@@ -724,6 +759,7 @@ def status_payload():
             ).isoformat(timespec="seconds"),
             "uptime_seconds": max(0, int(time.time() - boot_time)),
         },
+        "identity": identity_information(),
         "operating_system": operating_system_information(),
         "processor": processor_information(),
         "performance": {
@@ -736,8 +772,8 @@ def status_payload():
         "hardware": hardware,
         "disks": disk_information(),
         "network_adapters": network_information(),
-"services": {
-    "iperf3": iperf_status(),
+        "services": {
+            "iperf3": iperf_status(),
             "docker": {
                 "enabled": bool(CONFIG.get("docker_enabled", True)),
                 "socket": "/var/run/docker.sock",
