@@ -3,6 +3,7 @@ import json
 import threading
 from uuid import uuid4
 
+from beacn.services.classifier import classify_device
 from beacn.common import (
     db,
     normalise_windows_name,
@@ -108,6 +109,7 @@ def scan_network():
                     os_name = ""
                     os_version = ""
                     device_type = ""
+                    identity = {}
 
                     if agent:
                         agent_hostname = str(
@@ -144,6 +146,18 @@ def scan_network():
                         )
                     else:
                         iperf_available = int(tcp_open(ip, IPERF_PORT))
+
+                    classification = classify_device(
+                        hostname=agent_hostname or discovered_hostname or ip,
+                        vendor=device["vendor"],
+                        identity=identity,
+                    )
+
+                    if not device_type:
+                        device_type = classification["device_type"]
+
+                    if not os_name:
+                        os_name = classification["os_name"]
 
                     hostname = agent_hostname or discovered_hostname or ip
                     existing = conn.execute(
@@ -230,6 +244,13 @@ def scan_network():
                             device_type = CASE
                                 WHEN excluded.agent_available = 1
                                      AND excluded.device_type <> ''
+                                THEN excluded.device_type
+                                WHEN excluded.device_type <> ''
+                                     AND (
+                                         devices.device_type IS NULL
+                                         OR devices.device_type = ''
+                                         OR devices.device_type = 'unknown'
+                                     )
                                 THEN excluded.device_type
                                 ELSE devices.device_type
                             END
