@@ -66,9 +66,17 @@
     await loadDocker(false);
 
     const resolved = current.device || device;
-    document.getElementById('refreshAgentBtn').disabled = !resolved.agent_available;
-    document.getElementById('iperfBtn').disabled = !resolved.iperf_available;
-    document.getElementById('iperfReverseBtn').disabled = !resolved.iperf_available;
+    document.getElementById('refreshAgentBtn').disabled =
+      !resolved.agent_available;
+
+    document.getElementById('iperfBtn').disabled =
+      !resolved.iperf_available;
+
+    document.getElementById('iperfReverseBtn').disabled =
+      !resolved.iperf_available;
+
+    document.getElementById('editIdentityBtn').disabled =
+      !resolved;
   }
 
   function configureLivePolling() {
@@ -189,7 +197,15 @@
     select.innerHTML = filteredDevices.map(device => `
       <option value="${esc(device.ip)}">
         ${esc(
-          (device.hostname ? `${device.hostname} · ` : '') +
+          (
+            device.display_name
+              ? `${device.display_name} · `
+              : (
+                  device.hostname
+                    ? `${device.hostname} · `
+                    : ''
+                )
+          ) +
           device.ip +
           ` · ${deviceInventoryLabel(device)}` +
           (device.agent_available ? ' · Agent' : '') +

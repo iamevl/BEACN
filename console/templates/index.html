@@ -212,7 +212,90 @@
         <button id="iperfBtn">Run iperf3</button>
         <button id="iperfReverseBtn">Run reverse iperf3</button>
         <button id="resultsBtn">Show saved results</button>
+        <button id="editIdentityBtn">Edit identity</button>
       </div>
+
+      <section
+        class="identity-editor"
+        id="identityEditor"
+        hidden
+      >
+        <div class="identity-editor-header">
+          <div>
+            <h3>Edit device identity</h3>
+            <p class="muted" id="identityEditorTarget">
+              Select a device to edit.
+            </p>
+          </div>
+
+          <span
+            class="badge"
+            id="identitySourceBadge"
+          >
+            Unknown
+          </span>
+        </div>
+
+        <div class="identity-editor-grid">
+          <label>
+            <span>Friendly name</span>
+
+            <input
+              id="identityDisplayName"
+              type="text"
+              maxlength="100"
+              placeholder="Optional friendly name"
+            >
+          </label>
+
+          <label>
+            <span>Device type</span>
+
+            <select id="identityDeviceType">
+              <option value="unknown">❓ Unknown</option>
+              <option value="computer">💻 PC</option>
+              <option value="raspberry_pi">🍓 Raspberry Pi</option>
+              <option value="router">🛜 Router</option>
+              <option value="access_point">📡 Access point / repeater</option>
+              <option value="switch">🔀 Network switch</option>
+              <option value="nas">💾 NAS</option>
+              <option value="camera">📷 Camera</option>
+              <option value="doorbell">🔔 Doorbell</option>
+              <option value="phone">📱 Phone</option>
+              <option value="speaker">🔊 Speaker</option>
+              <option value="television">📺 Television</option>
+              <option value="media_tuner">📺 TV tuner</option>
+              <option value="game_console">🎮 Game console</option>
+              <option value="iot">🔌 IoT device</option>
+              <option value="appliance">🌀 Appliance</option>
+              <option value="ups">🔋 UPS</option>
+            </select>
+          </label>
+        </div>
+
+        <div class="identity-editor-actions">
+          <button
+            type="button"
+            id="cancelIdentityBtn"
+          >
+            Cancel
+          </button>
+
+          <button
+            type="button"
+            class="primary"
+            id="saveIdentityBtn"
+          >
+            Save identity
+          </button>
+        </div>
+
+        <div
+          class="identity-editor-message"
+          id="identityEditorMessage"
+          aria-live="polite"
+        ></div>
+      </section>
 
       <div id="status" class="status"></div>
     </section>

@@ -110,7 +110,18 @@ def update_device_from_agent(conn, target_ip, agent_payload, seen_at):
             agent_hostname = ?,
             os_name = COALESCE(NULLIF(?, ''), os_name),
             os_version = COALESCE(NULLIF(?, ''), os_version),
-            device_type = COALESCE(NULLIF(?, ''), device_type),
+            device_type = CASE
+                WHEN device_type_source = 'manual'
+                THEN device_type
+                ELSE COALESCE(NULLIF(?, ''), device_type)
+            END,
+            device_type_source = CASE
+                WHEN device_type_source = 'manual'
+                THEN 'manual'
+                WHEN NULLIF(?, '') IS NOT NULL
+                THEN 'agent'
+                ELSE device_type_source
+            END,
             cpu_percent = ?,
             memory_percent = ?,
             uptime_seconds = ?,
@@ -123,6 +134,7 @@ def update_device_from_agent(conn, target_ip, agent_payload, seen_at):
         str(device_info.get("hostname", "")).strip(),
         str(identity.get("os_name", "")).strip(),
         str(identity.get("os_version", "")).strip(),
+        str(identity.get("device_type", "")).strip(),
         str(identity.get("device_type", "")).strip(),
         performance.get("cpu_percent"),
         performance.get("memory_percent"),

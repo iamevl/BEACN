@@ -10,6 +10,7 @@ DEVICE_COLUMN_MIGRATIONS = {
     "os_name": "TEXT",
     "os_version": "TEXT",
     "device_type": "TEXT",
+    "device_type_source": "TEXT",
     "agent_available": "INTEGER NOT NULL DEFAULT 0",
     "agent_version": "TEXT",
     "agent_hostname": "TEXT",
@@ -116,6 +117,21 @@ def initialise_schema(conn: sqlite3.Connection) -> None:
 
     _add_missing_columns(conn, "devices", DEVICE_COLUMN_MIGRATIONS)
     _add_missing_columns(conn, "telemetry_history", TELEMETRY_COLUMN_MIGRATIONS)
+
+    conn.execute("""
+        UPDATE devices
+        SET device_type_source = CASE
+            WHEN agent_available = 1
+                 AND NULLIF(device_type, '') IS NOT NULL
+            THEN 'agent'
+            WHEN NULLIF(device_type, '') IS NULL
+                 OR device_type = 'unknown'
+            THEN 'unknown'
+            ELSE 'classifier'
+        END
+        WHERE device_type_source IS NULL
+           OR device_type_source = ''
+    """)
 
     rows = conn.execute("SELECT ip FROM devices WHERE id IS NULL OR id = ''").fetchall()
     for row in rows:

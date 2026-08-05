@@ -117,7 +117,155 @@
       status.textContent = 'Saved results loaded.';
     });
 
+  const identityEditor =
+    document.getElementById('identityEditor');
+
+  const identityDisplayName =
+    document.getElementById('identityDisplayName');
+
+  const identityDeviceType =
+    document.getElementById('identityDeviceType');
+
+  const identityEditorTarget =
+    document.getElementById('identityEditorTarget');
+
+  const identitySourceBadge =
+    document.getElementById('identitySourceBadge');
+
+  const identityEditorMessage =
+    document.getElementById('identityEditorMessage');
+
+
+  function closeIdentityEditor() {
+    identityEditor.hidden = true;
+    identityEditorMessage.textContent = '';
+  }
+
+
+  function openIdentityEditor() {
+    const device = selected();
+
+    if (!device) {
+      return;
+    }
+
+    identityDisplayName.value =
+      device.display_name || '';
+
+    identityDeviceType.value =
+      device.device_type || 'unknown';
+
+    identityEditorTarget.textContent =
+      `${device.hostname || device.ip} · ${device.ip}`;
+
+    const source =
+      device.device_type_source || 'unknown';
+
+    identitySourceBadge.textContent =
+      source === 'manual'
+        ? 'Manual'
+        : source === 'agent'
+          ? 'Agent'
+          : source === 'classifier'
+            ? 'Automatic'
+            : 'Unknown';
+
+    identityEditorMessage.textContent = '';
+    identityEditor.hidden = false;
+
+    identityEditor.scrollIntoView({
+      behavior: 'smooth',
+      block: 'nearest'
+    });
+
+    identityDisplayName.focus();
+  }
+
+
+  async function saveIdentity() {
+    const device = selected();
+
+    if (!device) {
+      return;
+    }
+
+    const saveButton =
+      document.getElementById('saveIdentityBtn');
+
+    saveButton.disabled = true;
+    identityEditorMessage.textContent =
+      'Saving identity…';
+
+    try {
+      const response = await fetch(
+        `/api/device/${encodeURIComponent(device.ip)}/identity`,
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({
+            display_name:
+              identityDisplayName.value.trim(),
+            device_type:
+              identityDeviceType.value
+          })
+        }
+      );
+
+      const payload = await response.json();
+
+      if (!response.ok || !payload.ok) {
+        throw new Error(
+          payload.error || 'Unable to save identity.'
+        );
+      }
+
+      identityEditorMessage.textContent =
+        'Identity saved.';
+
+      status.textContent =
+        'Manual device identity saved.';
+
+      await refreshDevices();
+      await refreshDeviceTypes();
+
+      setTimeout(closeIdentityEditor, 650);
+    } catch (error) {
+      identityEditorMessage.textContent =
+        error.message;
+    } finally {
+      saveButton.disabled = false;
+    }
+  }
+
+
+  document.getElementById('editIdentityBtn')
+    .addEventListener('click', openIdentityEditor);
+
+  document.getElementById('cancelIdentityBtn')
+    .addEventListener('click', closeIdentityEditor);
+
+  document.getElementById('saveIdentityBtn')
+    .addEventListener('click', saveIdentity);
+
+  identityDisplayName.addEventListener(
+    'keydown',
+    event => {
+      if (event.key === 'Enter') {
+        event.preventDefault();
+        saveIdentity();
+      }
+
+      if (event.key === 'Escape') {
+        closeIdentityEditor();
+      }
+    }
+  );
+
+
   select.addEventListener('change', async () => {
+    closeIdentityEditor();
     await details(false);
     configureLivePolling();
   });

@@ -120,7 +120,8 @@ def devices():
                 iperf_available, first_seen, last_seen,
                 agent_available, agent_version, agent_hostname,
                 cpu_percent, memory_percent, uptime_seconds,
-                agent_last_seen, os_name, os_version, device_type
+                agent_last_seen, os_name, os_version, device_type,
+                device_type_source
             FROM devices
             ORDER BY is_online DESC, ip
         """).fetchall()
@@ -184,6 +185,106 @@ def device_type_summary():
     return jsonify({
         "total": sum(item["total"] for item in types),
         "types": types,
+    })
+
+
+DEVICE_TYPES = {
+    "access_point",
+    "appliance",
+    "camera",
+    "computer",
+    "doorbell",
+    "game_console",
+    "iot",
+    "media_tuner",
+    "nas",
+    "phone",
+    "raspberry_pi",
+    "router",
+    "speaker",
+    "switch",
+    "television",
+    "unknown",
+    "ups",
+}
+
+
+@app.post("/api/device/<target>/identity")
+def update_device_identity(target):
+    """Store a manually managed friendly name and device type."""
+    if not valid_target(target):
+        return jsonify({
+            "ok": False,
+            "error": "Invalid target.",
+        }), 400
+
+    payload = request.get_json(silent=True) or {}
+
+    display_name = str(
+        payload.get("display_name", "")
+    ).strip()
+
+    device_type = str(
+        payload.get("device_type", "")
+    ).strip().lower()
+
+    if len(display_name) > 100:
+        return jsonify({
+            "ok": False,
+            "error": "Friendly name must be 100 characters or fewer.",
+        }), 400
+
+    if device_type not in DEVICE_TYPES:
+        return jsonify({
+            "ok": False,
+            "error": "Unsupported device type.",
+        }), 400
+
+    with db_write_lock:
+        with db() as conn:
+            row = conn.execute(
+                "SELECT id FROM devices WHERE ip = ?",
+                (target,),
+            ).fetchone()
+
+            if not row:
+                return jsonify({
+                    "ok": False,
+                    "error": "Device not found.",
+                }), 404
+
+            conn.execute("""
+                UPDATE devices
+                SET display_name = ?,
+                    device_type = ?,
+                    device_type_source = 'manual'
+                WHERE ip = ?
+            """, (
+                display_name,
+                device_type,
+                target,
+            ))
+
+            updated = conn.execute(
+                """
+                SELECT
+                    id,
+                    ip,
+                    hostname,
+                    display_name,
+                    device_type,
+                    device_type_source
+                FROM devices
+                WHERE ip = ?
+                """,
+                (target,),
+            ).fetchone()
+
+            conn.commit()
+
+    return jsonify({
+        "ok": True,
+        "device": dict(updated),
     })
 
 

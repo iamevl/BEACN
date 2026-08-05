@@ -161,11 +161,36 @@ def scan_network():
 
                     hostname = agent_hostname or discovered_hostname or ip
                     existing = conn.execute(
-                        "SELECT id, first_seen FROM devices WHERE ip = ?",
+                        """
+                        SELECT
+                            id,
+                            first_seen,
+                            device_type_source
+                        FROM devices
+                        WHERE ip = ?
+                        """,
                         (ip,),
                     ).fetchone()
-                    device_id = existing["id"] if existing and existing["id"] else str(uuid4())
-                    first_seen = existing["first_seen"] if existing else now
+                    device_id = (
+                        existing["id"]
+                        if existing and existing["id"]
+                        else str(uuid4())
+                    )
+                    first_seen = (
+                        existing["first_seen"]
+                        if existing
+                        else now
+                    )
+
+                    device_type_source = (
+                        "agent"
+                        if agent_available and device_type
+                        else (
+                            "classifier"
+                            if device_type
+                            else "unknown"
+                        )
+                    )
 
                     conn.execute("""
                         INSERT INTO devices (
@@ -174,11 +199,12 @@ def scan_network():
                             agent_available, agent_version, agent_hostname,
                             cpu_percent, memory_percent, uptime_seconds,
                             agent_last_seen, agent_payload,
-                            os_name, os_version, device_type
+                            os_name, os_version, device_type,
+                            device_type_source
                         )
                         VALUES (
                             ?, ?, ?, ?, ?, 1, ?, ?, ?,
-                            ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
+                            ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
                         )
                        ON CONFLICT(ip) DO UPDATE SET
                             hostname = excluded.hostname,
@@ -242,6 +268,8 @@ def scan_network():
                                 ELSE devices.os_version
                             END,
                             device_type = CASE
+                                WHEN devices.device_type_source = 'manual'
+                                THEN devices.device_type
                                 WHEN excluded.agent_available = 1
                                      AND excluded.device_type <> ''
                                 THEN excluded.device_type
@@ -253,6 +281,22 @@ def scan_network():
                                      )
                                 THEN excluded.device_type
                                 ELSE devices.device_type
+                            END,
+                            device_type_source = CASE
+                                WHEN devices.device_type_source = 'manual'
+                                THEN 'manual'
+                                WHEN excluded.agent_available = 1
+                                     AND excluded.device_type <> ''
+                                THEN 'agent'
+                                WHEN excluded.device_type <> ''
+                                     AND (
+                                         devices.device_type IS NULL
+                                         OR devices.device_type = ''
+                                         OR devices.device_type = 'unknown'
+                                         OR devices.device_type_source IS NULL
+                                     )
+                                THEN excluded.device_type_source
+                                ELSE devices.device_type_source
                             END
                     """, (
                         device_id,
@@ -274,6 +318,7 @@ def scan_network():
                         os_name,
                         os_version,
                         device_type,
+                        device_type_source,
                     ))
 
                     if agent:

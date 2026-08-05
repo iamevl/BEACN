@@ -975,3 +975,101 @@
 .device-type-chart-wrap canvas {
   transition: opacity 140ms ease;
 }
+
+
+/* Manual Device Identity Editor */
+
+.identity-editor {
+  margin-top: 18px;
+  padding: 16px;
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  background: var(--panel2);
+}
+
+.identity-editor[hidden] {
+  display: none;
+}
+
+.identity-editor-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 16px;
+}
+
+.identity-editor-header h3 {
+  margin: 0 0 4px;
+}
+
+.identity-editor-header p {
+  margin: 0;
+}
+
+.identity-editor-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+}
+
+.identity-editor-grid label {
+  margin: 0;
+}
+
+.identity-editor-grid label > span {
+  display: block;
+  margin-bottom: 8px;
+}
+
+.identity-editor-grid input,
+.identity-editor-grid select {
+  width: 100%;
+  border-radius: 11px;
+  border: 1px solid var(--border);
+  background: var(--panel);
+  color: var(--text);
+  padding: 11px 12px;
+  font: inherit;
+}
+
+.identity-editor-grid input:focus,
+.identity-editor-grid select:focus {
+  border-color: var(--accent);
+  outline: 2px solid rgb(103 232 200 / 18%);
+  outline-offset: 1px;
+}
+
+.identity-editor-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  margin-top: 16px;
+}
+
+.identity-editor-actions button {
+  width: auto;
+  min-width: 130px;
+}
+
+.identity-editor-message {
+  min-height: 20px;
+  margin-top: 10px;
+  color: var(--muted);
+  font-size: 13px;
+}
+
+@media (max-width: 700px) {
+  .identity-editor-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .identity-editor-actions {
+    display: grid;
+    grid-template-columns: 1fr;
+  }
+
+  .identity-editor-actions button {
+    width: 100%;
+  }
+}
