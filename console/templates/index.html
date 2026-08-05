@@ -151,6 +151,53 @@
 
     </section>
 
+    <section
+      class="card device-intelligence-card"
+      id="deviceIntelligenceCard"
+    >
+      <div class="device-intelligence-header">
+        <div>
+          <h2>Device intelligence</h2>
+          <p class="muted">
+            Classified devices across the monitored network.
+          </p>
+        </div>
+
+        <span
+          class="badge"
+          id="deviceTypeTotalBadge"
+        >
+          Loading…
+        </span>
+      </div>
+
+      <div class="device-intelligence-content">
+        <div class="device-type-chart-wrap">
+          <canvas
+            id="deviceTypeChart"
+            aria-label="Device type distribution"
+            role="img"
+          ></canvas>
+
+          <div
+            class="device-type-chart-centre"
+            aria-hidden="true"
+          >
+            <strong id="deviceTypeTotal">0</strong>
+            <span>Devices</span>
+          </div>
+        </div>
+
+        <div
+          class="device-type-legend"
+          id="deviceTypeLegend"
+          aria-live="polite"
+        >
+          Loading device classifications…
+        </div>
+      </div>
+    </section>
+
     <section class="card device-tools-card">
       <h2>Device tools</h2>
 
@@ -225,6 +272,7 @@
   <script src="{{ url_for('static', filename='js/core.js') }}?v={{ app_version }}"></script>
   <script src="{{ url_for('static', filename='js/hardware.js') }}?v={{ app_version }}"></script>
   <script src="{{ url_for('static', filename='js/charts.js') }}?v={{ app_version }}"></script>
+  <script src="{{ url_for('static', filename='js/device-types.js') }}?v={{ app_version }}"></script>
   <script src="{{ url_for('static', filename='js/devices.js') }}?v={{ app_version }}"></script>
   <script src="{{ url_for('static', filename='js/docker.js') }}?v={{ app_version }}"></script>
   <script src="{{ url_for('static', filename='js/health.js') }}?v={{ app_version }}"></script>

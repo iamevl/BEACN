@@ -92,25 +92,151 @@
     }, 2000);
   }
 
+  function visibleDevices() {
+    if (
+      !activeDeviceTypeFilter ||
+      !Array.isArray(activeDeviceTypeFilter.types) ||
+      !activeDeviceTypeFilter.types.length
+    ) {
+      return devices;
+    }
+
+    const allowedTypes = new Set(
+      activeDeviceTypeFilter.types
+    );
+
+    return devices.filter(device =>
+      allowedTypes.has(
+        device.device_type || 'unknown'
+      )
+    );
+  }
+
+
+  function deviceInventoryLabel(device) {
+    const hostname = String(
+      device.hostname || ''
+    ).toLowerCase();
+
+    const vendor = String(
+      device.vendor || ''
+    ).toLowerCase();
+
+    const deviceType =
+      device.device_type || 'unknown';
+
+    if (deviceType === 'computer') {
+      return 'PC';
+    }
+
+    if (
+      deviceType === 'media_tuner' ||
+      hostname.startsWith('hdhr-') ||
+      vendor.includes('silicondust')
+    ) {
+      return 'HDHomeRun TV tuner';
+    }
+
+    if (
+      deviceType === 'speaker' &&
+      vendor.includes('apple') &&
+      (
+        hostname.includes('pod') ||
+        hostname.includes('homepod')
+      )
+    ) {
+      return 'Apple HomePod';
+    }
+
+    if (
+      deviceType === 'appliance' &&
+      vendor.includes('dyson')
+    ) {
+      return 'Dyson fan';
+    }
+
+    if (
+      deviceType === 'access_point' &&
+      hostname.includes('deco')
+    ) {
+      return 'Wi-Fi repeater';
+    }
+
+    if (
+      deviceType === 'router' &&
+      (
+        vendor.includes('asus') ||
+        hostname.startsWith('rt-')
+      )
+    ) {
+      return 'ASUS router';
+    }
+
+    const presentation =
+      typeof deviceTypeDetails === 'function'
+        ? deviceTypeDetails(deviceType)
+        : null;
+
+    return presentation?.label || String(deviceType)
+      .replaceAll('_', ' ')
+      .replace(/\b\w/g, letter => letter.toUpperCase());
+  }
+
+
+  function renderDeviceOptions(preferredValue = '') {
+    const filteredDevices = visibleDevices();
+
+    select.innerHTML = filteredDevices.map(device => `
+      <option value="${esc(device.ip)}">
+        ${esc(
+          (device.hostname ? `${device.hostname} · ` : '') +
+          device.ip +
+          ` · ${deviceInventoryLabel(device)}` +
+          (device.agent_available ? ' · Agent' : '') +
+          (device.iperf_available ? ' · iperf3' : '')
+        )}
+      </option>`).join('');
+
+    if (
+      preferredValue &&
+      filteredDevices.some(
+        device => device.ip === preferredValue
+      )
+    ) {
+      select.value = preferredValue;
+    } else if (filteredDevices.length) {
+      select.value = filteredDevices[0].ip;
+    }
+
+    select.disabled = filteredDevices.length === 0;
+
+    if (!filteredDevices.length) {
+      select.innerHTML = `
+        <option value="">
+          No devices match this classification
+        </option>
+      `;
+    }
+  }
+
+
+  async function applyDeviceTypeFilter(filter) {
+    const previousValue = select.value;
+
+    activeDeviceTypeFilter = filter;
+    renderDeviceOptions(previousValue);
+
+    await details(false);
+  }
+
+
   async function refreshDevices() {
     const response = await fetch('/api/devices');
     const payload = await response.json();
     const oldValue = select.value;
 
     devices = payload.devices;
-    select.innerHTML = devices.map(device => `
-      <option value="${esc(device.ip)}">
-        ${esc(
-          (device.hostname ? `${device.hostname} · ` : '') +
-          device.ip +
-          (device.agent_available ? ' · Agent' : '') +
-          (device.iperf_available ? ' · iperf3' : '')
-        )}
-      </option>`).join('');
-
-    if (devices.some(device => device.ip === oldValue)) {
-      select.value = oldValue;
-    }
+    renderDeviceOptions(oldValue);
 
     document.getElementById('onlineCount').textContent =
       devices.filter(device => device.is_online).length;
@@ -119,7 +245,10 @@
     document.getElementById('iperfCount').textContent =
       devices.filter(device => device.iperf_available).length;
     document.getElementById('lastRefresh').textContent =
-      new Date().toLocaleTimeString([], {hour: '2-digit', minute: '2-digit'});
+      new Date().toLocaleTimeString([], {
+        hour: '2-digit',
+        minute: '2-digit'
+      });
 
     status.textContent = payload.scan.running
       ? 'Network scan running…'

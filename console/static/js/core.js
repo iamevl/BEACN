@@ -1,4 +1,5 @@
 let devices = [];
+  let activeDeviceTypeFilter = null;
   let current = null;
   let activeTab = 'overview';
   let liveEnabled = true;

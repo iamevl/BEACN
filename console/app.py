@@ -157,6 +157,36 @@ def devices():
     })
 
 
+@app.get("/api/device-types")
+def device_type_summary():
+    """Return inventory totals grouped by classified device type."""
+    with db() as conn:
+        rows = conn.execute("""
+            SELECT
+                COALESCE(
+                    NULLIF(device_type, ''),
+                    'unknown'
+                ) AS device_type,
+                COUNT(*) AS total
+            FROM devices
+            GROUP BY device_type
+            ORDER BY total DESC, device_type
+        """).fetchall()
+
+    types = [
+        {
+            "device_type": row["device_type"],
+            "total": row["total"],
+        }
+        for row in rows
+    ]
+
+    return jsonify({
+        "total": sum(item["total"] for item in types),
+        "types": types,
+    })
+
+
 @app.get("/api/devices/<device_id>")
 def canonical_device_details(device_id):
     device = repository.get(device_id)
