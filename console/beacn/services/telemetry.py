@@ -101,12 +101,16 @@ def update_device_from_agent(conn, target_ip, agent_payload, seen_at):
     device_info = agent_payload.get("device", {})
     agent_info = agent_payload.get("agent", {})
     services = agent_payload.get("services", {})
+    identity = agent_payload.get("identity", {})
 
     conn.execute("""
         UPDATE devices
         SET agent_available = 1,
             agent_version = ?,
             agent_hostname = ?,
+            os_name = COALESCE(NULLIF(?, ''), os_name),
+            os_version = COALESCE(NULLIF(?, ''), os_version),
+            device_type = COALESCE(NULLIF(?, ''), device_type),
             cpu_percent = ?,
             memory_percent = ?,
             uptime_seconds = ?,
@@ -117,6 +121,9 @@ def update_device_from_agent(conn, target_ip, agent_payload, seen_at):
     """, (
         str(agent_info.get("version", "")).strip(),
         str(device_info.get("hostname", "")).strip(),
+        str(identity.get("os_name", "")).strip(),
+        str(identity.get("os_version", "")).strip(),
+        str(identity.get("device_type", "")).strip(),
         performance.get("cpu_percent"),
         performance.get("memory_percent"),
         device_info.get("uptime_seconds"),

@@ -105,6 +105,9 @@ def scan_network():
                     uptime_seconds = None
                     agent_last_seen = None
                     agent_payload = None
+                    os_name = ""
+                    os_version = ""
+                    device_type = ""
 
                     if agent:
                         agent_hostname = str(
@@ -118,6 +121,19 @@ def scan_network():
                         memory_percent = performance.get("memory_percent")
                         uptime_seconds = agent.get("device", {}).get("uptime_seconds")
                         agent_last_seen = now
+                        identity = agent.get("identity", {})
+
+                        os_name = str(
+                            identity.get("os_name", "")
+                        ).strip()
+
+                        os_version = str(
+                            identity.get("os_version", "")
+                        ).strip()
+
+                        device_type = str(
+                            identity.get("device_type", "")
+                        ).strip()
                         agent_payload = json.dumps(agent, separators=(",", ":"))
                         iperf_available = int(
                             bool(
@@ -143,11 +159,12 @@ def scan_network():
                             iperf_available, first_seen, last_seen,
                             agent_available, agent_version, agent_hostname,
                             cpu_percent, memory_percent, uptime_seconds,
-                            agent_last_seen, agent_payload
+                            agent_last_seen, agent_payload,
+                            os_name, os_version, device_type
                         )
                         VALUES (
                             ?, ?, ?, ?, ?, 1, ?, ?, ?,
-                            ?, ?, ?, ?, ?, ?, ?, ?
+                            ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
                         )
                        ON CONFLICT(ip) DO UPDATE SET
                             hostname = excluded.hostname,
@@ -197,6 +214,24 @@ def scan_network():
                                 WHEN excluded.agent_available = 1
                                 THEN excluded.agent_payload
                                 ELSE devices.agent_payload
+                            END,
+                            os_name = CASE
+                                WHEN excluded.agent_available = 1
+                                     AND excluded.os_name <> ''
+                                THEN excluded.os_name
+                                ELSE devices.os_name
+                            END,
+                            os_version = CASE
+                                WHEN excluded.agent_available = 1
+                                     AND excluded.os_version <> ''
+                                THEN excluded.os_version
+                                ELSE devices.os_version
+                            END,
+                            device_type = CASE
+                                WHEN excluded.agent_available = 1
+                                     AND excluded.device_type <> ''
+                                THEN excluded.device_type
+                                ELSE devices.device_type
                             END
                     """, (
                         device_id,
@@ -215,6 +250,9 @@ def scan_network():
                         uptime_seconds,
                         agent_last_seen,
                         agent_payload,
+                        os_name,
+                        os_version,
+                        device_type,
                     ))
 
                     if agent:
