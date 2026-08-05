@@ -1,3 +1,77 @@
+let discoveryElapsedTimer = null;
+
+
+function formatDiscoveryElapsed(totalSeconds) {
+
+    const safeSeconds = Math.max(
+        0,
+        Math.floor(Number(totalSeconds) || 0)
+    );
+
+    const hours = Math.floor(safeSeconds / 3600);
+    const minutes = Math.floor((safeSeconds % 3600) / 60);
+    const seconds = safeSeconds % 60;
+
+    const paddedMinutes =
+        String(minutes).padStart(2, '0');
+
+    const paddedSeconds =
+        String(seconds).padStart(2, '0');
+
+    if (hours > 0) {
+        return `${hours}:${paddedMinutes}:${paddedSeconds}`;
+    }
+
+    return `${paddedMinutes}:${paddedSeconds}`;
+}
+
+
+function stopDiscoveryElapsedTimer() {
+
+    if (discoveryElapsedTimer !== null) {
+        clearInterval(discoveryElapsedTimer);
+        discoveryElapsedTimer = null;
+    }
+
+}
+
+
+function startDiscoveryElapsedTimer(startedAt) {
+
+    stopDiscoveryElapsedTimer();
+
+    const elapsedElement =
+        document.getElementById('discoveryElapsed');
+
+    const startedAtMilliseconds =
+        Date.parse(startedAt);
+
+    if (
+        !elapsedElement ||
+        Number.isNaN(startedAtMilliseconds)
+    ) {
+        return;
+    }
+
+    const updateElapsed = () => {
+
+        const elapsedSeconds = Math.floor(
+            (Date.now() - startedAtMilliseconds) / 1000
+        );
+
+        elapsedElement.textContent =
+            formatDiscoveryElapsed(elapsedSeconds);
+
+    };
+
+    updateElapsed();
+
+    discoveryElapsedTimer =
+        window.setInterval(updateElapsed, 1000);
+
+}
+
+
 async function refreshHealth() {
 
     try {
@@ -88,8 +162,9 @@ async function refreshHealth() {
            dockerMetric.textContent =
                h.counts.containers_running;
         }
-        const checks = h.checks.map(check => {
+        let discoveryStartedAt = null;
 
+        const checks = h.checks.map(check => {
             const icon =
                 check.state === 'ok'
                     ? '✅'
@@ -103,6 +178,11 @@ async function refreshHealth() {
                 check.id === 'discovery' &&
                 check.state === 'info' &&
                 check.details?.running === true;
+
+            if (discoveryRunning) {
+                discoveryStartedAt =
+                    check.details?.started_at || null;
+            }
 
             const activity = discoveryRunning
                 ? `
@@ -119,6 +199,14 @@ async function refreshHealth() {
                   `
                 : '';
 
+            const message = discoveryRunning
+                ? `
+                    Discovering network...
+                    Elapsed
+                    <span id="discoveryElapsed">00:00</span>
+                  `
+                : esc(check.message);
+
             return `
                 <div class="health-check health-check-${check.state}">
                     <span
@@ -129,7 +217,7 @@ async function refreshHealth() {
                     </span>
 
                     <span class="health-check-message">
-                        ${esc(check.message)}
+                        ${message}
                     </span>
 
                     ${activity}
@@ -140,9 +228,16 @@ async function refreshHealth() {
 
         document.getElementById('healthChecks').innerHTML = checks;
 
+        if (discoveryStartedAt) {
+            startDiscoveryElapsedTimer(discoveryStartedAt);
+        } else {
+            stopDiscoveryElapsedTimer();
+        }
     }
 
     catch (err) {
+
+        stopDiscoveryElapsedTimer();
 
         console.error(err);
 
