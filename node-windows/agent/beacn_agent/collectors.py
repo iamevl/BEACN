@@ -38,13 +38,60 @@ def windows_information():
     build = str(current_build or "")
     if build and ubr is not None:
         build = f"{build}.{ubr}"
+    product_name = (
+        read_registry_value(path, "ProductName")
+        or platform.system()
+    )
+
+    try:
+        if int(current_build or 0) >= 22000:
+            product_name = str(product_name).replace(
+                "Windows 10",
+                "Windows 11",
+            )
+    except (TypeError, ValueError):
+        pass
+
     return {
-        "product_name": read_registry_value(path, "ProductName") or platform.system(),
+        "product_name": product_name,
         "edition": read_registry_value(path, "EditionID") or "",
-        "display_version": read_registry_value(path, "DisplayVersion") or read_registry_value(path, "ReleaseId") or "",
+        "display_version": (
+            read_registry_value(path, "DisplayVersion")
+            or read_registry_value(path, "ReleaseId")
+            or ""
+        ),
         "build": build,
         "release": platform.release(),
         "architecture": platform.machine(),
+    }
+
+def identity_information():
+    """Return the canonical BEACN identity contract for Windows."""
+    os_info = windows_information()
+    bios_path = r"HARDWARE\DESCRIPTION\System\BIOS"
+
+    manufacturer = str(
+        read_registry_value(
+            bios_path,
+            "SystemManufacturer",
+        ) or ""
+    ).strip()
+
+    model = str(
+        read_registry_value(
+            bios_path,
+            "SystemProductName",
+        ) or ""
+    ).strip()
+
+    return {
+        "platform": "Windows",
+        "os_name": os_info.get("product_name", ""),
+        "os_version": os_info.get("display_version", ""),
+        "architecture": os_info.get("architecture", ""),
+        "manufacturer": manufacturer,
+        "model": model,
+        "device_type": "computer",
     }
 
 
@@ -156,6 +203,7 @@ def status_payload():
             "boot_time": datetime.fromtimestamp(boot_time, timezone.utc).isoformat(timespec="seconds"),
             "uptime_seconds": max(0, int(time.time() - boot_time)),
         },
+        "identity": identity_information(),
         "operating_system": windows_information(), "processor": processor_information(),
         "performance": {"cpu_percent": psutil.cpu_percent(interval=0.2), "memory_percent": memory.percent,
             "memory_total_bytes": memory.total, "memory_available_bytes": memory.available, "memory_used_bytes": memory.used},
