@@ -9,7 +9,7 @@ param(
 
 $ErrorActionPreference = 'Stop'
 
-$Version = '0.9.1'
+$Version = '0.9.2'
 $ServiceName = 'BeacnAgent'
 $InstallDir = Join-Path $env:ProgramFiles 'BEACN'
 $ConfigPath = Join-Path $InstallDir 'config.json'
