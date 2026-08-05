@@ -415,6 +415,10 @@ async function toggleDeviceTypeFilter(deviceType) {
     renderDeviceTypeLegend();
     drawDeviceTypeChart();
 
+    if (typeof refreshTopology === 'function') {
+        refreshTopology();
+    }
+
     const badge =
         document.getElementById(
             'deviceTypeTotalBadge'

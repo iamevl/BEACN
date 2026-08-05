@@ -257,6 +257,10 @@
     devices = payload.devices;
     renderDeviceOptions(oldValue);
 
+    if (typeof refreshTopology === 'function') {
+      refreshTopology();
+    }
+
     document.getElementById('onlineCount').textContent =
       devices.filter(device => device.is_online).length;
     document.getElementById('agentCount').textContent =
