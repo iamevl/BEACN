@@ -184,7 +184,22 @@
             aria-hidden="true"
           >
             <strong id="deviceTypeTotal">0</strong>
-            <span>Devices</span>
+
+            <span class="device-total-label">
+              Devices
+            </span>
+
+            <div class="device-centre-divider"></div>
+
+            <div class="device-online">
+              <span id="deviceOnlineTotal">0</span>
+              Online
+            </div>
+
+            <div class="device-offline">
+              <span id="deviceOfflineTotal">0</span>
+              Offline
+            </div>
           </div>
         </div>
 
@@ -302,17 +317,37 @@
 
     <section class="card device-details-card">
       <div class="device-hero">
-        <div>
-          <h2 id="heroName">No device selected</h2>
-          <div id="heroSubtitle" class="muted">—</div>
+        <div class="device-hero-identity">
+          <div
+            class="device-hero-type-icon"
+            id="heroTypeIcon"
+            aria-hidden="true"
+          >
+            ❓
+          </div>
+
+          <div class="device-hero-copy">
+            <h2 id="heroName">No device selected</h2>
+            <div id="heroSubtitle" class="muted">—</div>
+          </div>
         </div>
 
-        <div
-          id="heroStatus"
-          class="badge component-status"
-          aria-live="polite"
-        >
-          Unknown
+        <div class="device-hero-badges">
+          <div
+            id="classificationSourceBadge"
+            class="badge classification-source-badge"
+            aria-live="polite"
+          >
+            Unknown
+          </div>
+
+          <div
+            id="heroStatus"
+            class="badge component-status"
+            aria-live="polite"
+          >
+            Unknown
+          </div>
         </div>
       </div>
 

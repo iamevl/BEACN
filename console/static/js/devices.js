@@ -197,6 +197,9 @@
     select.innerHTML = filteredDevices.map(device => `
       <option value="${esc(device.ip)}">
         ${esc(
+          `${deviceTypeDetails(
+            device.device_type || 'unknown'
+          ).icon} ` +
           (
             device.display_name
               ? `${device.display_name} · `

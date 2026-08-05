@@ -64,10 +64,20 @@ const deviceTypePresentation = {
         icon: '🛜',
         colour: '#22d3ee'
     },
+    switch: {
+        label: 'Network switch',
+        icon: '🔀',
+        colour: '#14b8a6'
+    },
     speaker: {
         label: 'Speaker',
         icon: '🔊',
         colour: '#2dd4bf'
+    },
+    television: {
+        label: 'Television',
+        icon: '📺',
+        colour: '#6366f1'
     },
     unknown: {
         label: 'Unknown',
@@ -553,6 +563,31 @@ async function refreshDeviceTypes() {
 
         if (totalElement) {
             totalElement.textContent = total;
+        }
+
+
+        const online = Math.max(
+            0,
+            Number(payload.online) || 0
+        );
+
+        const offline = Math.max(
+            0,
+            Number(payload.offline) || 0
+        );
+
+        const onlineElement =
+            document.getElementById('deviceOnlineTotal');
+
+        const offlineElement =
+            document.getElementById('deviceOfflineTotal');
+
+        if (onlineElement) {
+            onlineElement.textContent = online;
+        }
+
+        if (offlineElement) {
+            offlineElement.textContent = offline;
         }
 
         if (badge) {

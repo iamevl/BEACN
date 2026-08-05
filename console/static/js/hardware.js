@@ -143,9 +143,105 @@ const primaryFanRpm = finite(primaryFan?.value);
       </div>`;
   }
 
+  function renderClassificationSource(device) {
+    const badge =
+      document.getElementById('classificationSourceBadge');
+
+    if (!badge) {
+      return;
+    }
+
+    const source =
+      device?.device_type_source || 'unknown';
+
+    const presentations = {
+      manual: {
+        label: 'Manual identity',
+        className: 'manual'
+      },
+      agent: {
+        label: 'Agent identity',
+        className: 'agent'
+      },
+      classifier: {
+        label: 'Automatic',
+        className: 'automatic'
+      },
+      unknown: {
+        label: 'Unknown',
+        className: 'unknown'
+      }
+    };
+
+    const presentation =
+      presentations[source] || presentations.unknown;
+
+    badge.className =
+      `badge classification-source-badge ${presentation.className}`;
+
+    badge.textContent = presentation.label;
+  }
+
+
+  function renderDeviceHeroIdentity(device) {
+    const name =
+      document.getElementById('heroName');
+
+    const subtitle =
+      document.getElementById('heroSubtitle');
+
+    const icon =
+      document.getElementById('heroTypeIcon');
+
+    if (!device) {
+      name.textContent = 'No device selected';
+      subtitle.textContent = '—';
+      icon.textContent = '❓';
+      icon.style.removeProperty('--device-type-colour');
+      renderClassificationSource(null);
+      return;
+    }
+
+    const deviceType =
+      device.device_type || 'unknown';
+
+    const presentation =
+      deviceTypeDetails(deviceType);
+
+    name.textContent =
+      device.display_name ||
+      device.hostname ||
+      device.ip;
+
+    const subtitleParts = [];
+
+    if (
+      device.display_name &&
+      device.hostname &&
+      device.hostname !== device.ip
+    ) {
+      subtitleParts.push(device.hostname);
+    }
+
+    subtitleParts.push(presentation.label);
+    subtitleParts.push(device.ip);
+
+    subtitle.textContent =
+      subtitleParts.filter(Boolean).join(' · ');
+
+    icon.textContent = presentation.icon;
+
+    icon.style.setProperty(
+      '--device-type-colour',
+      presentation.colour
+    );
+
+    renderClassificationSource(device);
+  }
+
+
   function render(device, agent) {
-    document.getElementById('heroName').textContent =
-      device?.hostname || device?.ip || 'No device selected';
+    renderDeviceHeroIdentity(device);
 
     const os = agent?.operating_system;
     const processor = agent?.processor;
@@ -154,11 +250,7 @@ const primaryFanRpm = finite(primaryFan?.value);
 
     renderHardware(device, agent);
 
-    document.getElementById('heroSubtitle').textContent = os
-      ? `${os.product_name}${os.display_version ? ` · ${os.display_version}` : ''}`
-      : (device?.ip || '—');
-
-renderComponentStatus(device, agent);
+    renderComponentStatus(device, agent);
 
     document.getElementById('tab-overview').innerHTML = device ? `
       <div class="hero-grid">

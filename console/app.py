@@ -182,8 +182,26 @@ def device_type_summary():
         for row in rows
     ]
 
+    with db() as conn:
+        status = conn.execute("""
+            SELECT
+                COUNT(*) AS total,
+                SUM(
+                    CASE
+                        WHEN is_online = 1 THEN 1
+                        ELSE 0
+                    END
+                ) AS online
+            FROM devices
+        """).fetchone()
+
+    total = int(status["total"] or 0)
+    online = int(status["online"] or 0)
+
     return jsonify({
-        "total": sum(item["total"] for item in types),
+        "total": total,
+        "online": online,
+        "offline": max(0, total - online),
         "types": types,
     })
 
