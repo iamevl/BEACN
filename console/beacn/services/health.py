@@ -20,6 +20,29 @@ def _greeting():
     return "Good evening"
 
 
+def _format_duration(seconds):
+    """Return a compact human-readable duration."""
+    if seconds is None:
+        return None
+
+    total_seconds = max(0, round(float(seconds)))
+    minutes, remaining_seconds = divmod(total_seconds, 60)
+    hours, remaining_minutes = divmod(minutes, 60)
+
+    parts = []
+
+    if hours:
+        parts.append(f"{hours}h")
+
+    if remaining_minutes:
+        parts.append(f"{remaining_minutes}m")
+
+    if remaining_seconds or not parts:
+        parts.append(f"{remaining_seconds}s")
+
+    return " ".join(parts)
+
+
 def _status_for_score(score):
     """Convert a numerical health score into a human status."""
     if score >= 90:
@@ -154,7 +177,8 @@ def _discovery_check():
             "ok",
             (
                 f"Discovery completed. "
-                f"{devices_found} devices found in {duration:.1f} seconds."
+                f"{devices_found} devices found in "
+                f"{_format_duration(duration)}."
             ),
             details=details,
         )
