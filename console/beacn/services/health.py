@@ -258,11 +258,11 @@ def _agent_check(counts):
 def _docker_check():
     try:
         snapshot = docker_snapshot()
-    except Exception as exc:
+    except Exception:
         return _check(
             "docker",
             "warning",
-            f"Docker monitoring is unavailable: {exc}",
+            "Docker monitoring is unavailable.",
             deduction=5,
             details={
                 "available": False,
