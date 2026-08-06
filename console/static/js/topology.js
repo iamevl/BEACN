@@ -33,6 +33,16 @@ function topologyDeviceButton(device, extraClass = '') {
         ? 'online'
         : 'offline';
 
+    const ip = String(
+        device.ip || ''
+    ).trim();
+
+    const mac = String(
+        device.mac ||
+        device.primary_mac ||
+        ''
+    ).trim();
+
     return `
         <button
           type="button"
@@ -42,7 +52,7 @@ function topologyDeviceButton(device, extraClass = '') {
             ${stateClass}
             ${extraClass}
           "
-          data-topology-ip="${esc(device.ip)}"
+          data-topology-ip="${esc(ip)}"
           style="
             --topology-node-colour:
             ${presentation.colour}
@@ -61,9 +71,42 @@ function topologyDeviceButton(device, extraClass = '') {
               ${esc(topologyDeviceName(device))}
             </strong>
 
-            <small>
-              ${esc(topologyDeviceSubtitle(device))}
+            <small class="topology-device-type-label">
+              ${esc(presentation.label)}
             </small>
+
+            <span class="topology-addresses">
+              ${
+                  ip
+                      ? `
+                          <span class="topology-address-row">
+                            <span class="topology-address-label">
+                              IP
+                            </span>
+
+                            <span class="topology-address-value">
+                              ${esc(ip)}
+                            </span>
+                          </span>
+                        `
+                      : ''
+              }
+
+              <span
+                class="
+                  topology-address-row
+                  ${mac ? '' : 'topology-address-row-muted'}
+                "
+              >
+                <span class="topology-address-label">
+                  MAC
+                </span>
+
+                <span class="topology-address-value">
+                  ${esc(mac || 'Not discovered')}
+                </span>
+              </span>
+            </span>
           </span>
 
           <span

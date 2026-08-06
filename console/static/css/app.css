@@ -3133,3 +3133,251 @@ button.topology-node:hover {
   background: var(--panel);
 }
 
+/* Copyable Topology Addresses */
+
+.topology-device-type-label {
+  display: block;
+  margin-top: 3px;
+}
+
+.topology-addresses {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+  margin-top: 7px;
+}
+
+.topology-address-row {
+  display: grid;
+  grid-template-columns: 30px minmax(0, 1fr) 22px;
+  align-items: center;
+  gap: 5px;
+  min-width: 0;
+  color: var(--muted);
+  font-size: 10px;
+  line-height: 1.25;
+}
+
+.topology-address-label {
+  color: color-mix(
+    in srgb,
+    var(--muted) 78%,
+    transparent
+  );
+  font-size: 8px;
+  font-weight: 750;
+  letter-spacing: .07em;
+  text-transform: uppercase;
+}
+
+.topology-address-value {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-family:
+    ui-monospace,
+    SFMono-Regular,
+    Menlo,
+    Monaco,
+    Consolas,
+    monospace;
+  user-select: text;
+}
+
+.topology-address-row-muted {
+  grid-template-columns: 30px minmax(0, 1fr);
+  opacity: .58;
+}
+
+.topology-copy-value {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 20px;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  color: var(--muted);
+  cursor: copy;
+  font-family: system-ui, sans-serif;
+  font-size: 13px;
+  line-height: 1;
+  user-select: none;
+}
+
+.topology-copy-value:hover,
+.topology-copy-value:focus-visible {
+  border-color: color-mix(
+    in srgb,
+    var(--topology-node-colour) 55%,
+    var(--border)
+  );
+  background: color-mix(
+    in srgb,
+    var(--topology-node-colour) 10%,
+    var(--panel2)
+  );
+  color: var(--text);
+  outline: none;
+}
+
+.topology-copy-value.copied {
+  color: var(--success);
+  border-color: rgb(34 197 94 / 36%);
+  background: rgb(34 197 94 / 8%);
+}
+
+.topology-copy-value.copy-failed {
+  color: var(--danger);
+  border-color: rgb(239 68 68 / 36%);
+  background: rgb(239 68 68 / 8%);
+}
+
+/*
+ * The additional address row needs slightly more vertical space,
+ * particularly for compact infrastructure cards.
+ */
+.topology-device-node {
+  min-height: 82px;
+}
+
+.topology-infrastructure-node,
+.topology-router-node,
+.topology-core-service-node {
+  min-height: 94px;
+}
+
+@media (max-width: 760px) {
+  .topology-address-row {
+    grid-template-columns: 27px minmax(0, 1fr) 22px;
+  }
+}
+
+/* Selectable Topology Addresses */
+
+/*
+ * Allow normal mouse text selection inside a topology card.
+ */
+.topology-node-copy,
+.topology-device-type-label,
+.topology-addresses,
+.topology-address-row,
+.topology-address-label,
+.topology-address-value {
+  user-select: text;
+  -webkit-user-select: text;
+}
+
+/*
+ * Prevent a text-selection drag from behaving like a button drag.
+ */
+.topology-node-copy {
+  cursor: text;
+}
+
+.topology-addresses {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+  margin-top: 6px;
+}
+
+.topology-address-row {
+  display: grid;
+  grid-template-columns: 30px minmax(0, 1fr);
+  align-items: center;
+  gap: 5px;
+  min-width: 0;
+  color: var(--muted);
+  font-size: 10px;
+  line-height: 1.25;
+}
+
+.topology-address-label {
+  color: color-mix(
+    in srgb,
+    var(--muted) 78%,
+    transparent
+  );
+  font-size: 8px;
+  font-weight: 750;
+  letter-spacing: .07em;
+  text-transform: uppercase;
+}
+
+.topology-address-value {
+  min-width: 0;
+  overflow: visible;
+  text-overflow: clip;
+  white-space: nowrap;
+  font-family:
+    ui-monospace,
+    SFMono-Regular,
+    Menlo,
+    Monaco,
+    Consolas,
+    monospace;
+}
+
+.topology-address-row-muted {
+  opacity: .58;
+}
+
+/*
+ * Hide any stale copy controls left by cached markup.
+ */
+.topology-copy-value {
+  display: none !important;
+}
+
+/* Compact Topology Card Typography */
+
+.topology-node-copy strong {
+  display: block;
+  margin-bottom: 0;
+  line-height: 1.08;
+}
+
+.topology-device-type-label {
+  display: block;
+  margin-top: 1px;
+  line-height: 1.08;
+}
+
+.topology-addresses {
+  display: grid;
+  gap: 1px;
+  min-width: 0;
+  margin-top: 3px;
+}
+
+.topology-address-row {
+  display: grid;
+  grid-template-columns: 28px minmax(0, 1fr);
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
+  line-height: 1.05;
+}
+
+.topology-address-label {
+  font-size: 7px;
+  line-height: 1;
+}
+
+.topology-address-value {
+  line-height: 1.05;
+  font-variant-numeric: tabular-nums;
+}
+
+.topology-device-node {
+  min-height: 74px;
+}
+
+.topology-infrastructure-node,
+.topology-router-node,
+.topology-core-service-node {
+  min-height: 84px;
+}
+
