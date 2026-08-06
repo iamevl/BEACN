@@ -1,26 +1,3 @@
-const TOPOLOGY_WIRED_TYPES = new Set([
-    'computer',
-    'nas',
-    'raspberry_pi',
-    'media_tuner',
-    'ups',
-    'switch'
-]);
-
-
-const TOPOLOGY_WIRELESS_TYPES = new Set([
-    'access_point',
-    'appliance',
-    'camera',
-    'doorbell',
-    'game_console',
-    'iot',
-    'phone',
-    'speaker',
-    'television'
-]);
-
-
 function topologyDeviceName(device) {
     return (
         device.display_name ||
@@ -110,154 +87,6 @@ function topologySyntheticRouter() {
 }
 
 
-function buildTopologyModel() {
-    const inventory = Array.isArray(devices)
-        ? devices
-        : [];
-
-    const routers = inventory.filter(
-        device => device.device_type === 'router'
-    );
-
-    const switches = inventory.filter(
-        device => device.device_type === 'switch'
-    );
-
-    const accessPoints = inventory.filter(
-        device => device.device_type === 'access_point'
-    );
-
-    const primaryRouter =
-        routers[0] || topologySyntheticRouter();
-
-    const infrastructureIps = new Set(
-        [
-            ...routers,
-            ...switches,
-            ...accessPoints
-        ].map(device => device.ip)
-    );
-
-    const clients = inventory.filter(
-        device => !infrastructureIps.has(device.ip)
-    );
-
-    const infrastructureByIp = new Map(
-        [
-            ...routers,
-            ...switches,
-            ...accessPoints
-        ].map(device => [device.ip, device])
-    );
-
-    const branches = [];
-
-    switches.forEach(device => {
-        branches.push({
-            device,
-            role: 'wired',
-            clients: []
-        });
-    });
-
-    accessPoints.forEach(device => {
-        branches.push({
-            device,
-            role: 'wireless',
-            clients: []
-        });
-    });
-
-    branches.push({
-        device: {
-            ip: "",
-            hostname: "Direct or unassigned",
-            display_name: "Direct or unassigned",
-            device_type: "unknown",
-            is_online: 1,
-            synthetic: true,
-            synthetic_role: "direct"
-        },
-        role: 'router',
-        clients: []
-    });
-
-    const switchBranches = branches.filter(
-        branch => branch.role === 'wired'
-    );
-
-    const accessPointBranches = branches.filter(
-        branch => branch.role === 'wireless'
-    );
-
-    const routerBranch = branches.find(
-        branch => branch.role === 'router'
-    );
-
-    let wiredIndex = 0;
-    let wirelessIndex = 0;
-
-    clients.forEach(device => {
-        const type = device.device_type || 'unknown';
-
-        const manualParentIp =
-            device.connection_source === 'manual'
-                ? device.connection_parent_ip
-                : '';
-
-        if (
-            manualParentIp &&
-            infrastructureByIp.has(manualParentIp)
-        ) {
-            const parentBranch = branches.find(
-                branch =>
-                    branch.device.ip === manualParentIp
-            );
-
-            if (parentBranch) {
-                parentBranch.clients.push(device);
-                return;
-            }
-        }
-
-        if (
-            TOPOLOGY_WIRED_TYPES.has(type) &&
-            switchBranches.length
-        ) {
-            switchBranches[
-                wiredIndex % switchBranches.length
-            ].clients.push(device);
-
-            wiredIndex += 1;
-            return;
-        }
-
-        if (
-            TOPOLOGY_WIRELESS_TYPES.has(type) &&
-            accessPointBranches.length
-        ) {
-            accessPointBranches[
-                wirelessIndex % accessPointBranches.length
-            ].clients.push(device);
-
-            wirelessIndex += 1;
-            return;
-        }
-
-        routerBranch.clients.push(device);
-    });
-
-    return {
-        total: inventory.length,
-        online: inventory.filter(
-            device => device.is_online
-        ).length,
-        primaryRouter,
-        branches
-    };
-}
-
-
 function topologyFocus() {
     if (
         !activeDeviceTypeFilter ||
@@ -286,6 +115,316 @@ function topologyDeviceMatchesFocus(device, focus) {
 }
 
 
+function topologySortDevices(items) {
+    return [...items].sort((left, right) => {
+        const onlineDifference =
+            Number(right.is_online) -
+            Number(left.is_online);
+
+        if (onlineDifference) {
+            return onlineDifference;
+        }
+
+        return topologyDeviceName(left).localeCompare(
+            topologyDeviceName(right)
+        );
+    });
+}
+
+
+function topologyInfrastructureType(device) {
+    if (device.device_type === 'switch') {
+        return 'wired';
+    }
+
+    if (device.device_type === 'access_point') {
+        return 'wireless';
+    }
+
+    return null;
+}
+
+
+function topologyConnectionMethod(device) {
+    const method = String(
+        device.connection_method || ''
+    ).toLowerCase();
+
+    if (method === 'wired' || method === 'wireless') {
+        return method;
+    }
+
+    return null;
+}
+
+
+function topologyIsCoreService(
+    device,
+    primaryRouter
+) {
+    const evidence = [
+        device.display_name,
+        device.hostname
+    ]
+        .filter(Boolean)
+        .join(' ')
+        .toLowerCase();
+
+    const manuallyConnectedToRouter =
+        device.connection_source === 'manual' &&
+        device.connection_parent_ip === primaryRouter.ip &&
+        topologyConnectionMethod(device) === 'wired';
+
+    const isPiHole =
+        evidence.includes('pihole') ||
+        evidence.includes('pi-hole');
+
+    return manuallyConnectedToRouter && isPiHole;
+}
+
+
+function topologyCoreServiceSubtitle(device) {
+    const method = topologyConnectionMethod(device);
+
+    return [
+        'DNS service',
+        device.ip,
+        method
+    ]
+        .filter(Boolean)
+        .join(' · ');
+}
+
+
+function buildTopologyModel() {
+    const inventory = Array.isArray(devices)
+        ? devices
+        : [];
+
+    const routers = inventory.filter(
+        device => device.device_type === 'router'
+    );
+
+    const primaryRouter =
+        routers[0] || topologySyntheticRouter();
+
+    const switches = inventory.filter(
+        device => device.device_type === 'switch'
+    );
+
+    const accessPoints = inventory.filter(
+        device => device.device_type === 'access_point'
+    );
+
+    const infrastructure = [
+        ...switches,
+        ...accessPoints
+    ];
+
+    const infrastructureByIp = new Map(
+        infrastructure.map(device => [
+            device.ip,
+            device
+        ])
+    );
+
+    const branchesByIp = new Map(
+        infrastructure.map(device => [
+            device.ip,
+            {
+                device,
+                clients: []
+            }
+        ])
+    );
+
+    const wiredDirect = [];
+    const wirelessDirect = [];
+    const coreServices = [];
+    const unassigned = [];
+
+    const infrastructureIps = new Set(
+        infrastructure.map(device => device.ip)
+    );
+
+    const routerIps = new Set(
+        routers.map(device => device.ip)
+    );
+
+    inventory.forEach(device => {
+        if (
+            infrastructureIps.has(device.ip) ||
+            routerIps.has(device.ip)
+        ) {
+            return;
+        }
+
+        const manual =
+            device.connection_source === 'manual';
+
+        const method =
+            topologyConnectionMethod(device);
+
+        const parentIp = String(
+            device.connection_parent_ip || ''
+        ).trim();
+
+        if (
+            topologyIsCoreService(
+                device,
+                primaryRouter
+            )
+        ) {
+            coreServices.push(device);
+            return;
+        }
+
+        if (!manual || !method || !parentIp) {
+            unassigned.push(device);
+            return;
+        }
+
+        if (
+            primaryRouter.ip &&
+            parentIp === primaryRouter.ip
+        ) {
+            if (method === 'wired') {
+                wiredDirect.push(device);
+            } else if (method === 'wireless') {
+                wirelessDirect.push(device);
+            } else {
+                unassigned.push(device);
+            }
+
+            return;
+        }
+
+        const branch = branchesByIp.get(parentIp);
+
+        if (!branch) {
+            unassigned.push(device);
+            return;
+        }
+
+        branch.clients.push(device);
+    });
+
+    const wiredSwitches = switches.map(device => ({
+        ...branchesByIp.get(device.ip),
+        clients: topologySortDevices(
+            branchesByIp.get(device.ip).clients
+        )
+    }));
+
+    const accessPointColumns = accessPoints
+        .map(device => {
+            const parentIp = String(
+                device.connection_parent_ip || ''
+            ).trim();
+
+            const parentDevice =
+                infrastructureByIp.get(parentIp) || null;
+
+            const connectionMethod =
+                topologyConnectionMethod(device);
+
+            const wirelessBackhaul =
+                connectionMethod === 'wireless' &&
+                parentDevice?.device_type ===
+                    'access_point';
+
+            return {
+                key: `access-point-${device.ip}`,
+                kind: 'access_point',
+                label: topologyDeviceName(device),
+                icon: '📡',
+                colour: deviceTypeDetails(
+                    'access_point'
+                ).colour,
+                device,
+                infrastructure: [],
+                direct: [],
+                clients: topologySortDevices(
+                    branchesByIp.get(device.ip).clients
+                ),
+                connectionMethod,
+                parentIp,
+                parentDevice,
+                wirelessBackhaul
+            };
+        })
+        .sort((left, right) => {
+            /*
+             * Put an AP parent immediately before its wireless child.
+             */
+            if (right.parentIp === left.device.ip) {
+                return -1;
+            }
+
+            if (left.parentIp === right.device.ip) {
+                return 1;
+            }
+
+            /*
+             * Ethernet/root APs appear before wireless-backhaul APs.
+             */
+            const leftRank =
+                left.wirelessBackhaul ? 1 : 0;
+
+            const rightRank =
+                right.wirelessBackhaul ? 1 : 0;
+
+            if (leftRank !== rightRank) {
+                return leftRank - rightRank;
+            }
+
+            return left.label.localeCompare(
+                right.label
+            );
+        });
+
+
+    const columns = [
+        {
+            key: 'wired',
+            kind: 'wired',
+            label: 'Wired',
+            icon: '🔌',
+            colour: '#22d3ee',
+            device: null,
+            infrastructure: wiredSwitches,
+            direct: topologySortDevices(wiredDirect),
+            clients: []
+        },
+        {
+            key: 'wireless',
+            kind: 'wireless',
+            label: 'Wireless',
+            icon: '📶',
+            colour: '#a78bfa',
+            device: null,
+            infrastructure: [],
+            direct: topologySortDevices(wirelessDirect),
+            clients: []
+        },
+        ...accessPointColumns
+    ];
+
+    return {
+        total: inventory.length,
+        online: inventory.filter(
+            device => device.is_online
+        ).length,
+        primaryRouter,
+        columns,
+        coreServices:
+            topologySortDevices(coreServices),
+        unassigned:
+            topologySortDevices(unassigned)
+    };
+}
+
+
 function focusTopologyModel(model) {
     const focus = topologyFocus();
 
@@ -298,43 +437,125 @@ function focusTopologyModel(model) {
         };
     }
 
-    const focusedBranches = [];
+    const focusedColumns = model.columns
+        .map(column => {
+            if (column.kind === 'access_point') {
+                const rootMatches =
+                    topologyDeviceMatchesFocus(
+                        column.device,
+                        focus
+                    );
 
-    model.branches.forEach(branch => {
-        const branchMatches =
+                const matchingClients =
+                    column.clients.filter(device =>
+                        topologyDeviceMatchesFocus(
+                            device,
+                            focus
+                        )
+                    );
+
+                if (
+                    !rootMatches &&
+                    !matchingClients.length
+                ) {
+                    return null;
+                }
+
+                return {
+                    ...column,
+                    clients: rootMatches
+                        ? []
+                        : matchingClients,
+                    focusedRoot: rootMatches
+                };
+            }
+
+            const infrastructure =
+                column.infrastructure
+                    .map(branch => {
+                        const rootMatches =
+                            topologyDeviceMatchesFocus(
+                                branch.device,
+                                focus
+                            );
+
+                        const matchingClients =
+                            branch.clients.filter(device =>
+                                topologyDeviceMatchesFocus(
+                                    device,
+                                    focus
+                                )
+                            );
+
+                        if (
+                            !rootMatches &&
+                            !matchingClients.length
+                        ) {
+                            return null;
+                        }
+
+                        return {
+                            ...branch,
+                            clients: rootMatches
+                                ? []
+                                : matchingClients,
+                            focusedRoot: rootMatches
+                        };
+                    })
+                    .filter(Boolean);
+
+            const direct =
+                column.direct.filter(device =>
+                    topologyDeviceMatchesFocus(
+                        device,
+                        focus
+                    )
+                );
+
+            if (
+                !infrastructure.length &&
+                !direct.length
+            ) {
+                return null;
+            }
+
+            return {
+                ...column,
+                infrastructure,
+                direct
+            };
+        })
+        .filter(Boolean);
+
+    const coreServices =
+        model.coreServices.filter(device =>
             topologyDeviceMatchesFocus(
-                branch.device,
+                device,
                 focus
-            );
+            )
+        );
 
-        const matchingClients =
-            branch.clients.filter(device =>
-                topologyDeviceMatchesFocus(
-                    device,
-                    focus
-                )
-            );
+    const unassigned =
+        model.unassigned.filter(device =>
+            topologyDeviceMatchesFocus(
+                device,
+                focus
+            )
+        );
 
-        if (!branchMatches && !matchingClients.length) {
-            return;
-        }
-
-        focusedBranches.push({
-            ...branch,
-            clients: branchMatches
-                ? []
-                : matchingClients,
-            focusedRoot: branchMatches
-        });
-    });
-
-    const matchingDevices = devices.filter(device =>
-        topologyDeviceMatchesFocus(device, focus)
-    );
+    const matchingDevices =
+        devices.filter(device =>
+            topologyDeviceMatchesFocus(
+                device,
+                focus
+            )
+        );
 
     return {
         ...model,
-        branches: focusedBranches,
+        columns: focusedColumns,
+        coreServices,
+        unassigned,
         focused: true,
         focus,
         focusCount: matchingDevices.length
@@ -342,41 +563,8 @@ function focusTopologyModel(model) {
 }
 
 
-function topologyBranchTitle(branch) {
-    if (branch.focusedRoot) {
-        return 'Selected infrastructure';
-    }
-
-    if (branch.role === 'wired') {
-        return 'Wired critical path';
-    }
-
-    if (branch.role === 'wireless') {
-        return 'Wireless critical path';
-    }
-
-    return 'Direct or unassigned';
-}
-
-
 function topologyClientList(clients) {
-    const sortedClients = [...clients].sort(
-        (left, right) => {
-            const onlineDifference =
-                Number(right.is_online) -
-                Number(left.is_online);
-
-            if (onlineDifference) {
-                return onlineDifference;
-            }
-
-            return topologyDeviceName(left).localeCompare(
-                topologyDeviceName(right)
-            );
-        }
-    );
-
-    if (!sortedClients.length) {
+    if (!clients.length) {
         return `
             <div class="topology-empty-branch">
               No connected devices assigned.
@@ -384,53 +572,443 @@ function topologyClientList(clients) {
         `;
     }
 
-    return sortedClients
+    return clients
         .map(device => topologyDeviceButton(device))
         .join('');
 }
 
 
 function renderInfrastructureColumn(branch) {
-    const infrastructureNode = branch.device.synthetic
-        ? `
-            <div
-              class="
-                topology-node
-                topology-device-node
-                topology-synthetic-node
-                topology-direct-node
-                online
-              "
-              style="--topology-node-colour:#64748b"
-            >
-              <span
-                class="topology-node-icon"
-                aria-hidden="true"
-              >
-                ↳
-              </span>
-
-              <span class="topology-node-copy">
-                <strong>Direct or unassigned</strong>
-                <small>No intermediary has been identified</small>
-              </span>
-            </div>
-          `
-        : topologyDeviceButton(
-            branch.device,
-            'topology-infrastructure-node'
-        );
-
     return `
         <section class="topology-infrastructure-column">
           <div class="topology-infrastructure-root">
-            ${infrastructureNode}
+            ${topologyDeviceButton(
+                branch.device,
+                'topology-infrastructure-node'
+            )}
           </div>
 
           <div class="topology-infrastructure-line"></div>
 
           <div class="topology-client-stack">
-            ${topologyClientList(branch.clients)}
+            ${
+                branch.focusedRoot
+                    ? `
+                        <div class="topology-path-end">
+                          Selected infrastructure node
+                        </div>
+                      `
+                    : topologyClientList(
+                        topologySortDevices(
+                            branch.clients
+                        )
+                    )
+            }
+          </div>
+        </section>
+    `;
+}
+
+
+function renderDirectClientGroup(devices, _label) {
+    if (!devices.length) {
+        return '';
+    }
+
+    return `
+        <section class="topology-direct-router-clients">
+          <div class="topology-client-stack">
+            ${topologyClientList(devices)}
+          </div>
+        </section>
+    `;
+}
+
+
+function renderAccessPointColumn(column) {
+    return `
+        <section
+          class="
+            topology-route-column
+            topology-route-column-access-point
+          "
+          data-topology-ap-ip="${esc(
+              column.device.ip
+          )}"
+          data-topology-parent-ip="${esc(
+              column.parentIp || ''
+          )}"
+          style="
+            --topology-column-colour:
+            ${column.colour}
+          "
+        >
+          <div class="topology-route-column-root">
+            ${topologyDeviceButton(
+                column.device,
+                'topology-infrastructure-node'
+            )}
+          </div>
+
+          <div class="topology-column-client-line"></div>
+
+          <div class="topology-client-stack">
+            ${
+                column.focusedRoot
+                    ? `
+                        <div class="topology-path-end">
+                          Selected access point
+                        </div>
+                      `
+                    : topologyClientList(
+                        column.clients
+                    )
+            }
+          </div>
+        </section>
+    `;
+}
+
+
+function renderWiredColumn(column) {
+    return `
+        <section
+          class="
+            topology-route-column
+            topology-route-column-wired
+          "
+          style="
+            --topology-column-colour:
+            ${column.colour}
+          "
+        >
+          <div class="topology-route-column-header">
+            <span aria-hidden="true">
+              ${column.icon}
+            </span>
+
+            <div>
+              <strong>${column.label}</strong>
+              <small>Router wired connections</small>
+            </div>
+          </div>
+
+          <div class="topology-column-client-line"></div>
+
+          <div class="topology-column-body">
+            ${
+                column.infrastructure
+                    .map(renderInfrastructureColumn)
+                    .join('')
+            }
+
+            ${renderDirectClientGroup(
+                column.direct,
+                'Direct to router'
+            )}
+
+            ${
+                !column.infrastructure.length &&
+                !column.direct.length
+                    ? `
+                        <div class="topology-empty-branch">
+                          No mapped wired connections.
+                        </div>
+                      `
+                    : ''
+            }
+          </div>
+        </section>
+    `;
+}
+
+
+function renderWirelessColumn(column) {
+    return `
+        <section
+          class="
+            topology-route-column
+            topology-route-column-wireless
+          "
+          style="
+            --topology-column-colour:
+            ${column.colour}
+          "
+        >
+          <div class="topology-route-column-header">
+            <span aria-hidden="true">
+              ${column.icon}
+            </span>
+
+            <div>
+              <strong>${column.label}</strong>
+              <small>Direct router Wi-Fi</small>
+            </div>
+          </div>
+
+          <div class="topology-column-client-line"></div>
+
+          <div class="topology-column-body">
+            ${renderDirectClientGroup(
+                column.direct,
+                'Direct wireless clients'
+            )}
+
+            ${
+                !column.direct.length
+                    ? `
+                        <div class="topology-empty-branch">
+                          No devices mapped directly to router Wi-Fi.
+                        </div>
+                      `
+                    : ''
+            }
+          </div>
+        </section>
+    `;
+}
+
+
+function renderTopologyColumn(column) {
+    if (column.kind === 'access_point') {
+        return renderAccessPointColumn(column);
+    }
+
+    if (column.kind === 'wired') {
+        return renderWiredColumn(column);
+    }
+
+    return renderWirelessColumn(column);
+}
+
+
+function renderCoreServices(model) {
+    if (!model.coreServices.length) {
+        return '';
+    }
+
+    return `
+        <section class="topology-core-services">
+          <div class="topology-core-services-heading">
+            <span aria-hidden="true">🧭</span>
+
+            <div>
+              <strong>Core network services</strong>
+
+              <small>
+                Logical services connected directly to
+                the router, not an inline traffic path.
+              </small>
+            </div>
+          </div>
+
+          <div class="topology-core-services-grid">
+            ${model.coreServices.map(device => {
+                const presentation =
+                    deviceTypeDetails(
+                        device.device_type ||
+                        'unknown'
+                    );
+
+                const stateClass =
+                    device.is_online
+                        ? 'online'
+                        : 'offline';
+
+                return `
+                    <button
+                      type="button"
+                      class="
+                        topology-node
+                        topology-device-node
+                        topology-core-service-node
+                        ${stateClass}
+                      "
+                      data-topology-ip="${esc(device.ip)}"
+                      style="
+                        --topology-node-colour:
+                        ${presentation.colour}
+                      "
+                      title="${esc(
+                          topologyCoreServiceSubtitle(
+                              device
+                          )
+                      )}"
+                    >
+                      <span
+                        class="topology-node-icon"
+                        aria-hidden="true"
+                      >
+                        🛡️
+                      </span>
+
+                      <span class="topology-node-copy">
+                        <strong>
+                          ${esc(
+                              topologyDeviceName(device)
+                          )}
+                        </strong>
+
+                        <small>
+                          ${esc(
+                              topologyCoreServiceSubtitle(
+                                  device
+                              )
+                          )}
+                        </small>
+                      </span>
+
+                      <span
+                        class="topology-node-status"
+                        aria-label="${
+                            device.is_online
+                                ? 'Online'
+                                : 'Offline'
+                        }"
+                      ></span>
+                    </button>
+                `;
+            }).join('')}
+          </div>
+        </section>
+    `;
+}
+
+
+function renderTopologyBackbone(model) {
+    const columns = model.columns || [];
+
+    const cells = columns.map((column, index) => {
+        const nextColumn = columns[index + 1];
+
+        const nextIsWirelessChild =
+            Boolean(
+                nextColumn?.wirelessBackhaul &&
+                nextColumn?.parentIp &&
+                column?.device?.ip ===
+                    nextColumn.parentIp
+            );
+
+        const currentIsWirelessChild =
+            Boolean(column.wirelessBackhaul);
+
+        const segmentClass = nextIsWirelessChild
+            ? 'topology-backbone-segment-backhaul'
+            : 'topology-backbone-segment-wired';
+
+        const stemClass = currentIsWirelessChild
+            ? 'topology-backbone-stem-backhaul'
+            : 'topology-backbone-stem-wired';
+
+        return `
+            <div
+              class="
+                topology-backbone-cell
+                ${stemClass}
+              "
+            >
+              ${
+                  index < columns.length - 1
+                      ? `
+                          <span
+                            class="
+                              topology-backbone-segment
+                              ${segmentClass}
+                            "
+                            aria-hidden="true"
+                          ></span>
+                        `
+                      : ''
+              }
+
+              ${
+                  nextIsWirelessChild
+                      ? `
+                          <span
+                            class="topology-backbone-label"
+                          >
+                            Wireless link
+                            <small>(backhaul)</small>
+                          </span>
+                        `
+                      : ''
+              }
+            </div>
+        `;
+    }).join('');
+
+    return `
+        <div class="topology-structural-backbone">
+          <div class="topology-backbone-router-stem"></div>
+
+          <div
+            class="topology-backbone-grid"
+            style="
+              --topology-column-count:
+              ${Math.max(1, columns.length)}
+            "
+          >
+            ${cells}
+          </div>
+        </div>
+    `;
+}
+
+
+function renderUnassignedPanel(model) {
+    if (!model.unassigned.length) {
+        return `
+            <section class="topology-unassigned topology-unassigned-empty">
+              <div class="topology-unassigned-header">
+                <div>
+                  <h3>Unassigned devices</h3>
+
+                  <p>
+                    Every discovered endpoint has been mapped
+                    into the topology.
+                  </p>
+                </div>
+
+                <span class="badge">0 devices</span>
+              </div>
+            </section>
+        `;
+    }
+
+    return `
+        <section class="topology-unassigned">
+          <div class="topology-unassigned-header">
+            <div>
+              <h3>Unassigned devices</h3>
+
+              <p>
+                These devices are known to BEACN but have not
+                been assigned a connection and parent device.
+                Use Edit identity to place them into the map.
+              </p>
+            </div>
+
+            <span class="badge">
+              ${model.unassigned.length}
+              device${
+                  model.unassigned.length === 1
+                      ? ''
+                      : 's'
+              }
+            </span>
+          </div>
+
+          <div class="topology-unassigned-grid">
+            ${
+                model.unassigned
+                    .map(device =>
+                        topologyDeviceButton(
+                            device,
+                            'topology-unassigned-node'
+                        )
+                    )
+                    .join('')
+            }
           </div>
         </section>
     `;
@@ -438,7 +1016,6 @@ function renderInfrastructureColumn(branch) {
 
 
 function bindTopologyNodes() {
-
     document
         .querySelectorAll('[data-topology-ip]')
         .forEach(node => {
@@ -464,7 +1041,6 @@ async function selectTopologyDevice(ip) {
         await applyDeviceTypeFilter(null);
         renderDeviceTypeLegend();
         drawDeviceTypeChart();
-        refreshTopology();
     }
 
     renderDeviceOptions(ip);
@@ -491,7 +1067,9 @@ async function selectTopologyDevice(ip) {
         });
 
     document
-        .querySelectorAll('.topology-node.selected')
+        .querySelectorAll(
+            '.topology-node.selected'
+        )
         .forEach(node =>
             node.classList.remove('selected')
         );
@@ -509,7 +1087,9 @@ function refreshTopology() {
         document.getElementById('topologyStage');
 
     const countBadge =
-        document.getElementById('topologyDeviceCount');
+        document.getElementById(
+            'topologyDeviceCount'
+        );
 
     if (!stage) {
         return;
@@ -520,21 +1100,38 @@ function refreshTopology() {
 
     if (countBadge) {
         countBadge.textContent = model.focused
-            ? `${model.focusCount} ${model.focus.label} · critical path`
-            : `${model.total} devices · ${model.online} online`;
+            ? (
+                `${model.focusCount} ` +
+                `${model.focus.label} · critical path`
+              )
+            : (
+                `${model.total} devices · ` +
+                `${model.online} online`
+              );
     }
 
     const router = model.primaryRouter.synthetic
         ? `
             <div
-              class="topology-node topology-router-node online"
-              style="--topology-node-colour:#22d3ee"
+              class="
+                topology-node
+                topology-router-node
+                online
+              "
+              style="
+                --topology-node-colour:#22d3ee
+              "
             >
-              <span class="topology-node-icon">🛜</span>
+              <span class="topology-node-icon">
+                🛜
+              </span>
 
               <span class="topology-node-copy">
                 <strong>Network gateway</strong>
-                <small>Router not yet identified</small>
+
+                <small>
+                  Router not yet identified
+                </small>
               </span>
             </div>
           `
@@ -550,12 +1147,13 @@ function refreshTopology() {
                     <div class="topology-focus-banner">
                       <div>
                         <strong>
-                          ${esc(model.focus.label)} critical paths
+                          ${esc(model.focus.label)}
+                          critical paths
                         </strong>
 
                         <span>
-                          Showing only the inferred routes between
-                          matching devices and the internet.
+                          Showing only mapped routes for
+                          matching devices.
                         </span>
                       </div>
 
@@ -570,11 +1168,15 @@ function refreshTopology() {
                 : ''
         }
 
-        <div class="
-          topology-map
-          topology-map-hierarchical
-          ${model.focused ? 'topology-map-focused' : ''}
-        ">
+        <div
+          class="
+            topology-map
+            topology-map-transport
+            ${model.focused
+                ? 'topology-map-focused'
+                : ''}
+          "
+        >
           <div class="topology-internet-row">
             <div class="topology-internet-node">
               <span aria-hidden="true">🌍</span>
@@ -588,15 +1190,25 @@ function refreshTopology() {
             ${router}
           </div>
 
-          <div class="topology-router-to-infrastructure"></div>
+          ${renderCoreServices(model)}
 
-          <div class="topology-infrastructure-grid">
+          ${renderTopologyBackbone(model)}
+
+          <div
+            class="topology-route-column-grid"
+            style="
+              --topology-column-count:
+              ${Math.max(1, model.columns.length)}
+            "
+          >
             ${
-                model.branches
-                    .map(renderInfrastructureColumn)
+                model.columns
+                    .map(renderTopologyColumn)
                     .join('')
             }
           </div>
+
+          ${renderUnassignedPanel(model)}
         </div>
     `;
 

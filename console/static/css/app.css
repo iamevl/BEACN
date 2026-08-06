@@ -2115,3 +2115,1021 @@ button.topology-node:hover {
 .topology-infrastructure-column::before {
   background: var(--accent);
 }
+
+
+/* Transport Tier Topology */
+
+.topology-map-transport {
+  min-width: 900px;
+}
+
+.topology-router-transport-trunk {
+  position: relative;
+  height: 50px;
+}
+
+.topology-router-transport-trunk::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 50%;
+  width: 3px;
+  height: 26px;
+  transform: translateX(-50%);
+  background: linear-gradient(
+    to bottom,
+    var(--accent),
+    color-mix(
+      in srgb,
+      var(--accent) 65%,
+      var(--border)
+    )
+  );
+  box-shadow:
+    0 0 10px rgb(103 232 200 / 20%);
+}
+
+.topology-router-transport-trunk::after {
+  content: "";
+  position: absolute;
+  left: 25%;
+  right: 25%;
+  top: 24px;
+  height: 3px;
+  border-radius: 999px;
+  background: color-mix(
+    in srgb,
+    var(--accent) 58%,
+    var(--border)
+  );
+}
+
+.topology-transport-grid {
+  display: grid;
+  grid-template-columns:
+    repeat(2, minmax(0, 1fr));
+  gap: 22px;
+  align-items: start;
+}
+
+.topology-transport {
+  --topology-transport-colour: var(--accent);
+
+  position: relative;
+  min-width: 0;
+  padding: 14px;
+  border: 1px solid color-mix(
+    in srgb,
+    var(--topology-transport-colour) 35%,
+    var(--border)
+  );
+  border-radius: 16px;
+  background: color-mix(
+    in srgb,
+    var(--topology-transport-colour) 5%,
+    var(--panel2)
+  );
+}
+
+.topology-transport::before {
+  content: "";
+  position: absolute;
+  top: -26px;
+  left: 50%;
+  width: 3px;
+  height: 26px;
+  transform: translateX(-50%);
+  background: color-mix(
+    in srgb,
+    var(--topology-transport-colour) 65%,
+    var(--border)
+  );
+}
+
+.topology-transport-header {
+  display: grid;
+  grid-template-columns: 34px minmax(0, 1fr);
+  align-items: center;
+  gap: 10px;
+  min-height: 58px;
+  padding: 10px 12px;
+  border: 1px solid color-mix(
+    in srgb,
+    var(--topology-transport-colour) 42%,
+    var(--border)
+  );
+  border-radius: 12px;
+  background: color-mix(
+    in srgb,
+    var(--topology-transport-colour) 10%,
+    var(--panel)
+  );
+}
+
+.topology-transport-header > span {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  height: 34px;
+  border-radius: 9px;
+  background: color-mix(
+    in srgb,
+    var(--topology-transport-colour) 15%,
+    var(--panel2)
+  );
+  font-size: 19px;
+}
+
+.topology-transport-header strong {
+  font-size: 16px;
+}
+
+.topology-transport-header small {
+  grid-column: 2;
+  margin-top: -7px;
+  color: var(--muted);
+  font-size: 11px;
+}
+
+.topology-transport-trunk {
+  width: 3px;
+  height: 30px;
+  margin: 0 auto;
+  background: linear-gradient(
+    to bottom,
+    color-mix(
+      in srgb,
+      var(--topology-transport-colour) 70%,
+      var(--border)
+    ),
+    var(--border)
+  );
+}
+
+.topology-transport-content {
+  min-width: 0;
+}
+
+.topology-transport
+.topology-infrastructure-grid {
+  grid-template-columns:
+    repeat(auto-fit, minmax(235px, 1fr));
+}
+
+.topology-direct-router-clients {
+  min-width: 0;
+}
+
+.topology-direct-router-heading {
+  margin-bottom: 8px;
+  color: var(--muted);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+}
+
+.topology-transport-empty-message {
+  padding: 20px 12px;
+  color: var(--muted);
+  font-size: 12px;
+  text-align: center;
+}
+
+.topology-unassigned {
+  margin-top: 30px;
+  padding: 16px;
+  border: 1px dashed color-mix(
+    in srgb,
+    var(--muted) 48%,
+    var(--border)
+  );
+  border-radius: 16px;
+  background: color-mix(
+    in srgb,
+    var(--panel2) 48%,
+    transparent
+  );
+}
+
+.topology-unassigned-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 18px;
+  margin-bottom: 14px;
+}
+
+.topology-unassigned-header h3 {
+  margin: 0 0 5px;
+}
+
+.topology-unassigned-header p {
+  max-width: 720px;
+  margin: 0;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.topology-unassigned-grid {
+  display: grid;
+  grid-template-columns:
+    repeat(auto-fit, minmax(235px, 1fr));
+  gap: 9px;
+}
+
+.topology-unassigned-node {
+  border-style: dashed;
+  opacity: .76;
+}
+
+.topology-unassigned-node:hover {
+  opacity: 1;
+}
+
+.topology-unassigned-empty {
+  opacity: .72;
+}
+
+.topology-unassigned-empty
+.topology-unassigned-header {
+  margin-bottom: 0;
+}
+
+.topology-map-focused
+.topology-router-transport-trunk::before,
+.topology-map-focused
+.topology-router-transport-trunk::after {
+  background: var(--accent);
+}
+
+@media (max-width: 800px) {
+  .topology-map-transport {
+    min-width: 740px;
+  }
+
+  .topology-transport-grid {
+    grid-template-columns: 1fr;
+    gap: 34px;
+  }
+
+  .topology-router-transport-trunk::after {
+    display: none;
+  }
+
+  .topology-transport::before {
+    display: none;
+  }
+
+  .topology-unassigned-header {
+    flex-direction: column;
+  }
+}
+
+
+/* Four Route Column Topology */
+
+.topology-router-column-trunk {
+  position: relative;
+  height: 52px;
+}
+
+.topology-router-column-trunk::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 50%;
+  width: 3px;
+  height: 27px;
+  transform: translateX(-50%);
+  background: linear-gradient(
+    to bottom,
+    var(--accent),
+    color-mix(
+      in srgb,
+      var(--accent) 64%,
+      var(--border)
+    )
+  );
+  box-shadow:
+    0 0 10px rgb(103 232 200 / 20%);
+}
+
+.topology-router-column-trunk::after {
+  content: "";
+  position: absolute;
+  top: 25px;
+  left: calc(
+    50% / var(--topology-column-count, 4)
+  );
+  right: calc(
+    50% / var(--topology-column-count, 4)
+  );
+  height: 3px;
+  border-radius: 999px;
+  background: color-mix(
+    in srgb,
+    var(--accent) 58%,
+    var(--border)
+  );
+  box-shadow:
+    0 0 8px rgb(103 232 200 / 15%);
+}
+
+.topology-route-column-grid {
+  display: grid;
+  grid-template-columns:
+    repeat(
+      var(--topology-column-count, 4),
+      minmax(245px, 1fr)
+    );
+  gap: 16px;
+  align-items: start;
+}
+
+.topology-route-column {
+  --topology-column-colour: var(--accent);
+
+  position: relative;
+  min-width: 0;
+}
+
+.topology-route-column::before {
+  content: "";
+  position: absolute;
+  top: -27px;
+  left: 50%;
+  width: 3px;
+  height: 27px;
+  transform: translateX(-50%);
+  background: color-mix(
+    in srgb,
+    var(--topology-column-colour) 66%,
+    var(--border)
+  );
+  box-shadow:
+    0 0 8px rgb(103 232 200 / 13%);
+}
+
+.topology-route-column-header {
+  display: grid;
+  grid-template-columns: 44px minmax(0, 1fr);
+  align-items: center;
+  gap: 11px;
+  min-height: 78px;
+  padding: 11px 13px;
+  border: 2px solid color-mix(
+    in srgb,
+    var(--topology-column-colour) 62%,
+    var(--border)
+  );
+  border-radius: 12px;
+  background: linear-gradient(
+    145deg,
+    color-mix(
+      in srgb,
+      var(--topology-column-colour) 13%,
+      var(--panel2)
+    ),
+    var(--panel)
+  );
+}
+
+.topology-route-column-header > span {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  height: 44px;
+  border-radius: 10px;
+  background: color-mix(
+    in srgb,
+    var(--topology-column-colour) 16%,
+    var(--panel2)
+  );
+  font-size: 22px;
+}
+
+.topology-route-column-header strong,
+.topology-route-column-header small {
+  display: block;
+}
+
+.topology-route-column-header strong {
+  font-size: 15px;
+}
+
+.topology-route-column-header small {
+  margin-top: 4px;
+  color: var(--muted);
+  font-size: 11px;
+}
+
+.topology-route-column-root
+.topology-infrastructure-node {
+  min-height: 78px;
+}
+
+.topology-column-tier-label {
+  width: max-content;
+  max-width: calc(100% - 24px);
+  margin: -11px 0 0 13px;
+  padding: 2px 7px;
+  border: 1px solid color-mix(
+    in srgb,
+    var(--topology-column-colour) 30%,
+    var(--border)
+  );
+  border-radius: 999px;
+  background: var(--panel);
+  color: var(--muted);
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+}
+
+.topology-column-client-line {
+  width: 3px;
+  height: 28px;
+  margin: 0 auto;
+  background: linear-gradient(
+    to bottom,
+    color-mix(
+      in srgb,
+      var(--topology-column-colour) 62%,
+      var(--border)
+    ),
+    var(--border)
+  );
+}
+
+.topology-column-body {
+  display: grid;
+  gap: 12px;
+}
+
+.topology-route-column
+.topology-client-stack {
+  min-height: 68px;
+}
+
+.topology-route-column-wired {
+  --topology-column-colour: #22d3ee;
+}
+
+.topology-route-column-wireless {
+  --topology-column-colour: #a78bfa;
+}
+
+.topology-map-focused
+.topology-router-column-trunk::before,
+.topology-map-focused
+.topology-router-column-trunk::after,
+.topology-map-focused
+.topology-route-column::before {
+  background: var(--accent);
+}
+
+@media (max-width: 1050px) {
+  .topology-route-column-grid {
+    grid-template-columns:
+      repeat(
+        var(--topology-column-count, 4),
+        minmax(225px, 1fr)
+      );
+  }
+
+  .topology-map-transport {
+    min-width: calc(
+      var(--topology-column-count, 4) * 240px
+    );
+  }
+}
+
+
+/* Four Column Connector Polish */
+
+/*
+ * Span precisely between the centres of the first and last
+ * topology columns, regardless of how many columns are rendered.
+ */
+.topology-router-column-trunk::after {
+  left: calc(
+    50% / var(--topology-column-count, 4)
+  );
+  right: calc(
+    50% / var(--topology-column-count, 4)
+  );
+  top: 25px;
+  height: 3px;
+  border-radius: 999px;
+  background: color-mix(
+    in srgb,
+    var(--accent) 62%,
+    var(--border)
+  );
+  box-shadow:
+    0 0 9px rgb(103 232 200 / 17%);
+}
+
+/*
+ * Keep the router trunk joined cleanly to the shared bus.
+ */
+.topology-router-column-trunk::before {
+  top: 0;
+  height: 28px;
+  z-index: 2;
+}
+
+/*
+ * Each column drop begins on the shared bus and meets the top
+ * edge of its transport or access-point card.
+ */
+.topology-route-column::before {
+  top: -27px;
+  width: 3px;
+  height: 28px;
+  z-index: 2;
+  background: color-mix(
+    in srgb,
+    var(--topology-column-colour) 70%,
+    var(--border)
+  );
+  box-shadow:
+    0 0 8px rgb(103 232 200 / 14%);
+}
+
+/*
+ * The former Wireless Access Point pill used a negative margin
+ * and could disappear behind the AP node. It is redundant because
+ * the node subtitle already identifies the device as an AP.
+ */
+.topology-column-tier-label {
+  display: none;
+}
+
+/*
+ * Make the AP/switch-to-client relationship unmistakable.
+ */
+.topology-route-column-root {
+  position: relative;
+  z-index: 2;
+}
+
+.topology-column-client-line {
+  position: relative;
+  width: 3px;
+  height: 36px;
+  margin: 0 auto;
+  background: linear-gradient(
+    to bottom,
+    color-mix(
+      in srgb,
+      var(--topology-column-colour) 72%,
+      var(--border)
+    ),
+    var(--border)
+  );
+  box-shadow:
+    0 0 7px rgb(103 232 200 / 11%);
+}
+
+.topology-column-client-line::after {
+  content: "";
+  position: absolute;
+  left: 50%;
+  bottom: 0;
+  width: 18px;
+  height: 2px;
+  transform: translateX(-50%);
+  background: var(--border);
+}
+
+/*
+ * Remove the detached Direct wireless clients heading.
+ * The transport card already says Direct router Wi-Fi and the
+ * child panel already carries the Connected devices heading.
+ */
+.topology-direct-router-heading {
+  display: none;
+}
+
+.topology-direct-router-clients {
+  margin: 0;
+}
+
+/*
+ * Make transport cards subtly different from real hardware nodes.
+ */
+.topology-route-column-wired
+.topology-route-column-header,
+.topology-route-column-wireless
+.topology-route-column-header {
+  border-style: dashed;
+  background: color-mix(
+    in srgb,
+    var(--topology-column-colour) 7%,
+    var(--panel2)
+  );
+}
+
+/*
+ * Focused critical paths retain exactly the same geometry.
+ */
+.topology-map-focused
+.topology-router-column-trunk::before,
+.topology-map-focused
+.topology-router-column-trunk::after,
+.topology-map-focused
+.topology-route-column::before,
+.topology-map-focused
+.topology-column-client-line {
+  background: var(--accent);
+}
+
+
+/* Core Network Services */
+
+.topology-core-services {
+  position: relative;
+  width: min(100%, 520px);
+  margin: 18px auto 0;
+  padding: 12px;
+  border: 1px dashed rgb(96 165 250 / 42%);
+  border-radius: 14px;
+  background: rgb(59 130 246 / 5%);
+}
+
+.topology-core-services::before {
+  content: "";
+  position: absolute;
+  top: -19px;
+  left: 50%;
+  width: 2px;
+  height: 19px;
+  transform: translateX(-50%);
+  background: repeating-linear-gradient(
+    to bottom,
+    var(--info) 0,
+    var(--info) 4px,
+    transparent 4px,
+    transparent 7px
+  );
+}
+
+.topology-core-services-heading {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 10px;
+}
+
+.topology-core-services-heading > span {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  height: 34px;
+  flex: 0 0 34px;
+  border-radius: 9px;
+  background: rgb(59 130 246 / 10%);
+  font-size: 17px;
+}
+
+.topology-core-services-heading strong,
+.topology-core-services-heading small {
+  display: block;
+}
+
+.topology-core-services-heading strong {
+  font-size: 13px;
+}
+
+.topology-core-services-heading small {
+  margin-top: 3px;
+  color: var(--muted);
+  font-size: 10px;
+  line-height: 1.4;
+}
+
+.topology-core-services-grid {
+  display: grid;
+  grid-template-columns:
+    repeat(auto-fit, minmax(240px, 1fr));
+  gap: 8px;
+}
+
+.topology-core-service-node {
+  border-style: dashed;
+  background: color-mix(
+    in srgb,
+    var(--info) 6%,
+    var(--panel)
+  );
+}
+
+.topology-core-service-node
+.topology-node-icon {
+  background: rgb(59 130 246 / 12%);
+}
+
+/*
+ * The service strip adds height between the router and the route
+ * columns, so its logical dashed connector remains visually
+ * separate from the solid physical topology beneath it.
+ */
+.topology-core-services
++ .topology-router-column-trunk {
+  margin-top: 8px;
+}
+
+@media (max-width: 700px) {
+  .topology-core-services {
+    width: 100%;
+  }
+}
+
+
+
+
+/* The line itself already provides the wireless symbol. */
+.topology-backhaul-icon {
+  display: none !important;
+}
+
+.topology-ap-backhaul-child
+.topology-backhaul-detail > span:last-child {
+  margin: 0;
+  padding: 4px 8px;
+
+  border: 1px solid rgb(192 132 252 / 38%);
+  border-radius: 8px;
+
+  background: color-mix(
+    in srgb,
+    var(--panel) 96%,
+    transparent
+  );
+
+  color: #d8b4fe;
+  font-size: 9px;
+  line-height: 1.2;
+  text-align: center;
+  white-space: nowrap;
+}
+
+/*
+ * Do not leave extra vertical space beneath either WAP. Their
+ * connected-device panels return to normal positioning.
+ */
+.topology-ap-backhaul-child
+.topology-column-client-line,
+.topology-ap-backhaul-root:has(
+  + .topology-ap-backhaul-child
+)
+.topology-column-client-line {
+  height: 36px;
+}
+
+/*
+ * Preserve the purple replacement segment in focused-path mode.
+ */
+.topology-map-focused
+.topology-ap-backhaul-child::after {
+  border-top-color: #d8b4fe;
+  background: var(--panel);
+
+  filter:
+    drop-shadow(
+      0 0 7px rgb(216 180 254 / 52%)
+    );
+}
+
+/* Structural Segmented Topology Backbone */
+
+/*
+ * Disable the old one-piece backbone and old automatic column stems.
+ */
+.topology-router-column-trunk {
+  display: none !important;
+}
+
+.topology-route-column::before {
+  display: none !important;
+}
+
+/*
+ * Backbone container.
+ */
+.topology-structural-backbone {
+  position: relative;
+  height: 58px;
+}
+
+.topology-backbone-router-stem {
+  position: absolute;
+  top: 0;
+  left: 50%;
+  width: 3px;
+  height: 28px;
+  transform: translateX(-50%);
+  background: color-mix(
+    in srgb,
+    var(--accent) 68%,
+    var(--border)
+  );
+  box-shadow:
+    0 0 8px rgb(103 232 200 / 18%);
+}
+
+/*
+ * Uses exactly the same column geometry and gap as the device grid.
+ */
+.topology-backbone-grid {
+  position: absolute;
+  inset: 26px 0 0;
+
+  display: grid;
+  grid-template-columns:
+    repeat(
+      var(--topology-column-count, 4),
+      minmax(245px, 1fr)
+    );
+  gap: 16px;
+
+  height: 32px;
+}
+
+.topology-backbone-cell {
+  position: relative;
+  min-width: 0;
+}
+
+/*
+ * Vertical stem from backbone to each column.
+ */
+.topology-backbone-cell::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 50%;
+  width: 3px;
+  height: 32px;
+  transform: translateX(-50%);
+  z-index: 3;
+}
+
+.topology-backbone-stem-wired::before {
+  background: color-mix(
+    in srgb,
+    var(--accent) 68%,
+    var(--border)
+  );
+  box-shadow:
+    0 0 7px rgb(103 232 200 / 14%);
+}
+
+.topology-backbone-stem-backhaul::before {
+  width: 0;
+  background: none;
+  border-left: 3px dotted #c084fc;
+  box-shadow:
+    0 0 6px rgb(192 132 252 / 25%);
+}
+
+/*
+ * Every segment spans from the centre of one grid column to the
+ * centre of the next, including the 16px grid gap.
+ */
+.topology-backbone-segment {
+  position: absolute;
+  top: 0;
+  left: 50%;
+  width: calc(100% + 16px);
+  height: 3px;
+  z-index: 4;
+  pointer-events: none;
+}
+
+.topology-backbone-segment-wired {
+  background: color-mix(
+    in srgb,
+    var(--accent) 68%,
+    var(--border)
+  );
+  box-shadow:
+    0 0 7px rgb(103 232 200 / 14%);
+}
+
+.topology-backbone-segment-backhaul {
+  height: 0;
+  background: none;
+  border-top: 3px dotted #c084fc;
+  filter:
+    drop-shadow(
+      0 0 5px rgb(192 132 252 / 38%)
+    );
+}
+
+/*
+ * Relationship label is tied directly to the dotted segment.
+ */
+.topology-backbone-label {
+  position: absolute;
+  top: -43px;
+  left: calc(100% + 8px);
+  z-index: 12;
+
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+
+  min-width: 94px;
+  padding: 4px 8px;
+
+  transform: translateX(-50%);
+
+  border: 1px solid rgb(192 132 252 / 42%);
+  border-radius: 8px;
+
+  background: var(--panel);
+  color: #d8b4fe;
+
+  font-size: 9px;
+  font-weight: 700;
+  line-height: 1.15;
+  text-align: center;
+  white-space: nowrap;
+
+  box-shadow:
+    0 0 7px rgb(192 132 252 / 17%);
+}
+
+.topology-backbone-label small {
+  color: #c4b5fd;
+  font-size: 8px;
+}
+
+/*
+ * Keep the route columns directly beneath the backbone stems.
+ */
+.topology-route-column-grid {
+  margin-top: 0;
+}
+
+/*
+ * Focused critical paths preserve connection type.
+ */
+.topology-map-focused
+.topology-backbone-segment-wired,
+.topology-map-focused
+.topology-backbone-stem-wired::before,
+.topology-map-focused
+.topology-backbone-router-stem {
+  background: var(--accent);
+}
+
+.topology-map-focused
+.topology-backbone-segment-backhaul {
+  border-top-color: #d8b4fe;
+}
+
+.topology-map-focused
+.topology-backbone-stem-backhaul::before {
+  border-left-color: #d8b4fe;
+}
+
+@media (max-width: 1050px) {
+  .topology-backbone-grid {
+    grid-template-columns:
+      repeat(
+        var(--topology-column-count, 4),
+        minmax(225px, 1fr)
+      );
+  }
+}
+
+/* Centre Backhaul Label On Link */
+
+.topology-backbone-label {
+  top: 0;
+  transform: translate(-50%, -50%);
+  background: var(--panel);
+}
+
+/*
+ * Give the label a little horizontal breathing space while
+ * deliberately masking the dotted line behind the text.
+ */
+.topology-backbone-label::before {
+  content: "";
+  position: absolute;
+  inset: -2px -6px;
+  z-index: -1;
+  border-radius: 9px;
+  background: var(--panel);
+}
+
