@@ -14,6 +14,8 @@ DEVICE_COLUMN_MIGRATIONS = {
     "connection_method": "TEXT",
     "connection_parent_ip": "TEXT",
     "connection_source": "TEXT",
+    "management_url": "TEXT",
+    "notes": "TEXT",
     "agent_available": "INTEGER NOT NULL DEFAULT 0",
     "agent_version": "TEXT",
     "agent_hostname": "TEXT",

@@ -379,6 +379,29 @@
               </option>
             </select>
           </label>
+
+          <label class="identity-editor-wide">
+            <span>Primary management interface</span>
+
+            <input
+              id="identityManagementUrl"
+              type="url"
+              maxlength="500"
+              placeholder="https://192.168.1.134"
+              autocomplete="off"
+            >
+          </label>
+
+          <label class="identity-editor-wide">
+            <span>Notes</span>
+
+            <textarea
+              id="identityNotes"
+              maxlength="2000"
+              rows="3"
+              placeholder="Optional notes about this device"
+            ></textarea>
+          </label>
         </div>
 
         <p class="identity-connection-help">
@@ -446,6 +469,12 @@
           >
             Unknown
           </div>
+
+          <div
+            id="heroQuickActions"
+            class="device-hero-quick-actions"
+            aria-live="polite"
+          ></div>
         </div>
       </div>
 
@@ -486,6 +515,7 @@
   </main>
 
   <script src="{{ url_for('static', filename='js/core.js') }}?v={{ app_version }}"></script>
+  <script src="{{ url_for('static', filename='js/device-profile.js') }}?v={{ app_version }}"></script>
   <script src="{{ url_for('static', filename='js/hardware.js') }}?v={{ app_version }}"></script>
   <script src="{{ url_for('static', filename='js/charts.js') }}?v={{ app_version }}"></script>
   <script src="{{ url_for('static', filename='js/device-types.js') }}?v={{ app_version }}"></script>

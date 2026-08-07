@@ -132,6 +132,12 @@
   const identityConnectionParent =
     document.getElementById('identityConnectionParent');
 
+  const identityManagementUrl =
+    document.getElementById('identityManagementUrl');
+
+  const identityNotes =
+    document.getElementById('identityNotes');
+
   const identityEditorTarget =
     document.getElementById('identityEditorTarget');
 
@@ -247,6 +253,12 @@
     identityConnectionMethod.value =
       device.connection_method || 'automatic';
 
+    identityManagementUrl.value =
+      device.management_url || '';
+
+    identityNotes.value =
+      device.notes || '';
+
     renderIdentityConnectionParents(
       device.connection_parent_ip || ''
     );
@@ -310,7 +322,11 @@
             connection_method:
               identityConnectionMethod.value,
             connection_parent_ip:
-              identityConnectionParent.value
+              identityConnectionParent.value,
+            management_url:
+              identityManagementUrl.value.trim(),
+            notes:
+              identityNotes.value.trim()
           })
         }
       );
@@ -331,6 +347,13 @@
 
       await refreshDevices();
       await refreshDeviceTypes();
+
+      /*
+       * Reload the selected device so newly saved profile
+       * metadata is immediately reflected in the hero,
+       * quick actions and Relationship Inspector.
+       */
+      await details(false);
 
       setTimeout(closeIdentityEditor, 650);
     } catch (error) {

@@ -3381,3 +3381,501 @@ button.topology-node:hover {
   min-height: 84px;
 }
 
+/* Device Profiles and Relationship Inspector */
+
+.identity-editor-wide {
+  grid-column: 1 / -1;
+}
+
+.identity-editor textarea {
+  width: 100%;
+  resize: vertical;
+  min-height: 78px;
+  font: inherit;
+}
+
+.relationship-inspector {
+  margin-top: 18px;
+  padding: 16px;
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  background:
+    color-mix(
+      in srgb,
+      var(--panel2) 76%,
+      transparent
+    );
+}
+
+.relationship-inspector-heading {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 14px;
+}
+
+.relationship-inspector-heading h3 {
+  margin: 0;
+}
+
+.relationship-inspector-heading p {
+  margin: 4px 0 0;
+}
+
+.relationship-inspector-grid {
+  display: grid;
+  grid-template-columns:
+    repeat(
+      auto-fit,
+      minmax(135px, 1fr)
+    );
+  gap: 10px;
+}
+
+.relationship-stat {
+  min-width: 0;
+  padding: 11px 12px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--panel);
+}
+
+.relationship-stat small {
+  display: block;
+  margin-bottom: 5px;
+  color: var(--muted);
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: .06em;
+}
+
+.relationship-stat strong {
+  display: block;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.relationship-section {
+  margin-top: 15px;
+  padding-top: 14px;
+  border-top: 1px solid var(--border);
+}
+
+.relationship-section h4 {
+  margin: 0 0 9px;
+  font-size: 13px;
+}
+
+.relationship-device-link {
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--accent);
+  font: inherit;
+  font-weight: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.relationship-device-link:hover {
+  text-decoration: underline;
+}
+
+.relationship-management-link {
+  display: grid;
+  grid-template-columns:
+    auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 10px;
+  padding: 11px 12px;
+  border: 1px solid
+    color-mix(
+      in srgb,
+      var(--accent) 35%,
+      var(--border)
+    );
+  border-radius: 10px;
+  background:
+    color-mix(
+      in srgb,
+      var(--accent) 7%,
+      var(--panel)
+    );
+  color: var(--text);
+  text-decoration: none;
+}
+
+.relationship-management-link:hover {
+  border-color:
+    color-mix(
+      in srgb,
+      var(--accent) 65%,
+      var(--border)
+    );
+}
+
+.relationship-management-link small {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--muted);
+  font-family:
+    ui-monospace,
+    SFMono-Regular,
+    Menlo,
+    Monaco,
+    Consolas,
+    monospace;
+}
+
+.relationship-management-empty {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.relationship-path {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+}
+
+.relationship-path-step {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+}
+
+.relationship-path-connector {
+  display: block;
+  margin: 2px 0 2px 12px;
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.relationship-path-device {
+  padding: 5px 9px;
+  border-radius: 7px;
+}
+
+.relationship-path-current {
+  background:
+    color-mix(
+      in srgb,
+      var(--accent) 9%,
+      transparent
+    );
+  color: var(--text);
+  font-weight: 700;
+}
+
+.relationship-notes {
+  white-space: pre-wrap;
+  color: var(--text);
+  line-height: 1.45;
+}
+
+.relationship-source-manual {
+  border-color: rgb(52 211 153 / 32%);
+}
+
+.relationship-source-unknown {
+  opacity: .72;
+}
+
+@media (max-width: 720px) {
+  .relationship-inspector-heading {
+    flex-direction: column;
+  }
+
+  .relationship-inspector-grid {
+    grid-template-columns:
+      repeat(2, minmax(0, 1fr));
+  }
+}
+
+/* Device Hero Quick Actions */
+
+.device-hero-badges {
+  align-items: flex-end;
+}
+
+.device-hero-quick-actions {
+  display: flex;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+  gap: 7px;
+  width: 100%;
+  margin-top: 5px;
+}
+
+.device-hero-action {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+
+  min-height: 32px;
+  padding: 6px 11px;
+
+  border: 1px solid
+    color-mix(
+      in srgb,
+      var(--accent) 42%,
+      var(--border)
+    );
+
+  border-radius: 9px;
+
+  background:
+    color-mix(
+      in srgb,
+      var(--accent) 8%,
+      var(--panel2)
+    );
+
+  color: var(--text);
+  font-size: 11px;
+  font-weight: 700;
+  text-decoration: none;
+
+  transition:
+    border-color .15s ease,
+    background .15s ease,
+    transform .15s ease;
+}
+
+.device-hero-action:hover {
+  border-color:
+    color-mix(
+      in srgb,
+      var(--accent) 75%,
+      var(--border)
+    );
+
+  background:
+    color-mix(
+      in srgb,
+      var(--accent) 14%,
+      var(--panel2)
+    );
+
+  transform: translateY(-1px);
+}
+
+.device-hero-action-arrow {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+@media (max-width: 720px) {
+  .device-hero-badges {
+    align-items: flex-start;
+  }
+
+  .device-hero-quick-actions {
+    justify-content: flex-start;
+  }
+}
+
+/* Network Topology Tab Polish */
+
+#tab-network .relationship-inspector {
+  margin-top: 0;
+  margin-bottom: 18px;
+}
+
+.relationship-source {
+  white-space: nowrap;
+}
+
+.relationship-transport {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+
+  padding: 3px 8px;
+  border-radius: 999px;
+
+  font-size: 11px;
+  line-height: 1.2;
+}
+
+.relationship-transport-wired {
+  color: #67e8f9;
+  background: rgb(34 211 238 / 10%);
+  border: 1px solid rgb(34 211 238 / 30%);
+}
+
+.relationship-transport-wireless {
+  color: #c4b5fd;
+  background: rgb(167 139 250 / 10%);
+  border: 1px solid rgb(167 139 250 / 30%);
+}
+
+.relationship-transport-unknown {
+  color: var(--muted);
+  background: rgb(100 116 139 / 10%);
+  border: 1px solid rgb(100 116 139 / 25%);
+}
+
+.relationship-verified {
+  display: inline-block;
+  margin-left: 6px;
+  padding: 2px 6px;
+
+  border-radius: 999px;
+
+  color: #6ee7b7;
+  background: rgb(52 211 153 / 10%);
+
+  font-size: 9px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: .04em;
+}
+
+.relationship-lock {
+  display: inline-block;
+  margin-left: 5px;
+  font-size: 10px;
+}
+
+.relationship-path {
+  padding: 4px 0;
+}
+
+.relationship-path-step {
+  width: min(100%, 360px);
+}
+
+.relationship-path-device {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+
+  width: 100%;
+  min-height: 52px;
+
+  padding: 8px 10px;
+
+  border: 1px solid var(--border);
+  border-radius: 10px;
+
+  background: var(--panel);
+
+  text-align: left;
+  text-decoration: none;
+}
+
+button.relationship-path-device {
+  cursor: pointer;
+}
+
+button.relationship-path-device:hover {
+  border-color:
+    color-mix(
+      in srgb,
+      var(--accent) 55%,
+      var(--border)
+    );
+
+  background:
+    color-mix(
+      in srgb,
+      var(--accent) 5%,
+      var(--panel)
+    );
+
+  text-decoration: none;
+}
+
+.relationship-path-current {
+  border-color:
+    color-mix(
+      in srgb,
+      var(--accent) 45%,
+      var(--border)
+    );
+
+  background:
+    color-mix(
+      in srgb,
+      var(--accent) 8%,
+      var(--panel)
+    );
+}
+
+.relationship-path-icon {
+  display: grid;
+  place-items: center;
+
+  width: 34px;
+  height: 34px;
+  flex: 0 0 34px;
+
+  border-radius: 8px;
+
+  background:
+    color-mix(
+      in srgb,
+      var(--relationship-path-colour) 14%,
+      transparent
+    );
+
+  font-size: 18px;
+}
+
+.relationship-path-copy {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.relationship-path-copy strong {
+  color: var(--text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.relationship-path-copy small {
+  margin-top: 2px;
+  color: var(--muted);
+  font-family:
+    ui-monospace,
+    SFMono-Regular,
+    Menlo,
+    Monaco,
+    Consolas,
+    monospace;
+}
+
+.relationship-path-connector {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+
+  width: 34px;
+  height: 30px;
+
+  margin: 0 0 0 10px;
+
+  color: var(--muted);
+}
+
+.relationship-path-connector span {
+  width: 1px;
+  flex: 1;
+  background: var(--border);
+}
+
+.relationship-path-connector b {
+  margin-top: -2px;
+  font-size: 9px;
+  font-weight: 400;
+}
+
+

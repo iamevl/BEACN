@@ -317,7 +317,7 @@ function topologyTreeToViewModel(tree) {
 }
 
 
-function buildTopologyModelFromTree() {
+function buildTopologyModel() {
     if (
         typeof buildTopologyTree !==
         'function'

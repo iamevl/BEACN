@@ -252,6 +252,8 @@ const primaryFanRpm = finite(primaryFan?.value);
 
     renderComponentStatus(device, agent);
 
+    renderDeviceProfileQuickActions(device);
+
     document.getElementById('tab-overview').innerHTML = device ? `
       <div class="hero-grid">
         <div class="hero-box">
@@ -270,6 +272,7 @@ const primaryFanRpm = finite(primaryFan?.value);
           <div class="secondary">${performance ? `${Number(performance.memory_percent || 0).toFixed(1)}% currently used` : ''}</div>
         </div>
       </div>
+
       <div class="info-grid">
         ${box('IP address', device.ip)}
         ${box('Hostname', device.hostname)}
@@ -368,6 +371,23 @@ const primaryFanRpm = finite(primaryFan?.value);
 
     const cpu = performance?.cpu_percent ?? device?.cpu_percent;
     const memory = performance?.memory_percent ?? device?.memory_percent;
+
+    /*
+     * Network Topology belongs in the Network tab rather than
+     * Overview. The normal interface cards remain untouched
+     * underneath it.
+     */
+    const networkPanel =
+      document.getElementById('tab-network');
+
+    if (device && networkPanel) {
+      networkPanel.insertAdjacentHTML(
+        'afterbegin',
+        deviceRelationshipInspector(device)
+      );
+
+      bindDeviceProfileLinks();
+    }
 
     document.getElementById('tab-performance').innerHTML = `
       <div class="live-controls">

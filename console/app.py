@@ -122,7 +122,8 @@ def devices():
                 cpu_percent, memory_percent, uptime_seconds,
                 agent_last_seen, os_name, os_version, device_type,
                 device_type_source, connection_method,
-                connection_parent_ip, connection_source
+                connection_parent_ip, connection_source,
+                management_url, notes
             FROM devices
             ORDER BY is_online DESC, ip
         """).fetchall()
@@ -255,6 +256,14 @@ def update_device_identity(target):
         payload.get("connection_parent_ip", "")
     ).strip()
 
+    management_url = str(
+        payload.get("management_url", "")
+    ).strip()
+
+    notes = str(
+        payload.get("notes", "")
+    ).strip()
+
     if len(display_name) > 100:
         return jsonify({
             "ok": False,
@@ -265,6 +274,33 @@ def update_device_identity(target):
         return jsonify({
             "ok": False,
             "error": "Unsupported device type.",
+        }), 400
+
+    if len(management_url) > 500:
+        return jsonify({
+            "ok": False,
+            "error": "Management URL must be 500 characters or fewer.",
+        }), 400
+
+    if (
+        management_url
+        and not (
+            management_url.startswith("http://")
+            or management_url.startswith("https://")
+        )
+    ):
+        return jsonify({
+            "ok": False,
+            "error": (
+                "Management URL must begin with "
+                "http:// or https://."
+            ),
+        }), 400
+
+    if len(notes) > 2000:
+        return jsonify({
+            "ok": False,
+            "error": "Notes must be 2000 characters or fewer.",
         }), 400
 
     allowed_connection_methods = {
@@ -349,7 +385,9 @@ def update_device_identity(target):
                         WHEN ? = 'automatic'
                         THEN 'inferred'
                         ELSE 'manual'
-                    END
+                    END,
+                    management_url = NULLIF(?, ''),
+                    notes = NULLIF(?, '')
                 WHERE ip = ?
             """, (
                 display_name,
@@ -357,6 +395,8 @@ def update_device_identity(target):
                 connection_method,
                 connection_parent_ip,
                 connection_method,
+                management_url,
+                notes,
                 target,
             ))
 
@@ -371,7 +411,9 @@ def update_device_identity(target):
                     device_type_source,
                     connection_method,
                     connection_parent_ip,
-                    connection_source
+                    connection_source,
+                    management_url,
+                    notes
                 FROM devices
                 WHERE ip = ?
                 """,
