@@ -53,6 +53,36 @@ INTERFACE_OIDS = {
 }
 
 
+
+# Standard BRIDGE-MIB forwarding database.
+#
+# dot1dTpFdbAddress maps forwarding-table rows to MAC addresses.
+# dot1dTpFdbPort maps those rows to logical bridge ports.
+# dot1dBasePortIfIndex maps bridge ports back to IF-MIB indexes.
+BRIDGE_OIDS = {
+    "base_port_ifindex":
+        "1.3.6.1.2.1.17.1.4.1.2",
+
+    "fdb_address":
+        "1.3.6.1.2.1.17.4.3.1.1",
+
+    "fdb_port":
+        "1.3.6.1.2.1.17.4.3.1.2",
+
+    "fdb_status":
+        "1.3.6.1.2.1.17.4.3.1.3",
+}
+
+
+BRIDGE_FDB_STATUS = {
+    1: "other",
+    2: "invalid",
+    3: "learned",
+    4: "self",
+    5: "management",
+}
+
+
 INTERFACE_STATUS = {
     1: "up",
     2: "down",
@@ -375,6 +405,53 @@ async def _probe_async(
             pass
 
 
+def _oid_suffix(
+    oid: Any,
+    base_oid: str,
+) -> tuple[int, ...] | None:
+    """
+    Return the numeric OID suffix beneath a known numeric base.
+    """
+
+    try:
+        base_parts = tuple(
+            int(part)
+            for part in base_oid.strip(".").split(".")
+        )
+
+        if hasattr(oid, "asTuple"):
+            oid_parts = tuple(
+                int(part)
+                for part in oid.asTuple()
+            )
+        else:
+            raw = str(
+                oid.prettyPrint()
+                if hasattr(oid, "prettyPrint")
+                else oid
+            ).strip(".")
+
+            oid_parts = tuple(
+                int(part)
+                for part in raw.split(".")
+            )
+
+    except (
+        TypeError,
+        ValueError,
+        AttributeError,
+    ):
+        return None
+
+    if len(oid_parts) <= len(base_parts):
+        return None
+
+    if oid_parts[:len(base_parts)] != base_parts:
+        return None
+
+    return oid_parts[len(base_parts):]
+
+
 def _interface_index_from_oid(
     oid: Any,
     base_oid: str,
@@ -448,6 +525,52 @@ def _format_mac(value: Any) -> str | None:
         return None
 
     return text
+
+
+async def _walk_raw_column(
+    engine: SnmpEngine,
+    auth_data: Any,
+    transport: Any,
+    oid: str,
+) -> tuple[list[tuple[Any, Any]], str | None]:
+
+    rows: list[tuple[Any, Any]] = []
+
+    iterator = walk_cmd(
+        engine,
+        auth_data,
+        transport,
+        ContextData(),
+        ObjectType(
+            ObjectIdentity(oid)
+        ),
+        lexicographicMode=False,
+    )
+
+    async for (
+        error_indication,
+        error_status,
+        error_index,
+        var_binds,
+    ) in iterator:
+
+        if error_indication:
+            return rows, str(error_indication)
+
+        if error_status:
+            return (
+                rows,
+                error_status.prettyPrint(),
+            )
+
+        for var_bind in var_binds:
+            object_name, value = var_bind
+
+            rows.append(
+                (object_name, value)
+            )
+
+    return rows, None
 
 
 async def _walk_column(
@@ -735,6 +858,474 @@ async def _interfaces_async(
             pass
 
 
+def _mac_from_oid_suffix(
+    suffix: tuple[int, ...] | None,
+) -> str | None:
+
+    if not suffix:
+        return None
+
+    # The BRIDGE-MIB forwarding database normally indexes
+    # entries using six decimal octets.
+    octets = suffix[-6:]
+
+    if len(octets) != 6:
+        return None
+
+    if any(
+        value < 0 or value > 255
+        for value in octets
+    ):
+        return None
+
+    return ":".join(
+        f"{value:02x}"
+        for value in octets
+    )
+
+
+async def _bridge_async(
+    target: str,
+    *,
+    version: str | None = None,
+    community: str | None = None,
+    username: str | None = None,
+    auth_password: str | None = None,
+    priv_password: str | None = None,
+    port: int = SNMP_PORT,
+    timeout: float = SNMP_TIMEOUT_SECONDS,
+    retries: int = SNMP_RETRIES,
+) -> dict[str, Any]:
+
+    target = str(target or "").strip()
+
+    if not target:
+        return {
+            "available": False,
+            "target": target,
+            "error": "No target supplied.",
+        }
+
+    engine = SnmpEngine()
+
+    try:
+        selected_version, auth_data = _auth_data(
+            version=version,
+            community=community,
+            username=username,
+            auth_password=auth_password,
+            priv_password=priv_password,
+        )
+
+        transport = await UdpTransportTarget.create(
+            (target, int(port)),
+            timeout=float(timeout),
+            retries=int(retries),
+        )
+
+        # ----------------------------------------------------
+        # Bridge port -> IF-MIB index
+        # ----------------------------------------------------
+
+        base_rows, base_error = (
+            await _walk_raw_column(
+                engine,
+                auth_data,
+                transport,
+                BRIDGE_OIDS[
+                    "base_port_ifindex"
+                ],
+            )
+        )
+
+        bridge_ports: dict[int, int] = {}
+
+        for object_name, value in base_rows:
+            suffix = _oid_suffix(
+                object_name,
+                BRIDGE_OIDS[
+                    "base_port_ifindex"
+                ],
+            )
+
+            if not suffix:
+                continue
+
+            try:
+                bridge_port = int(
+                    suffix[0]
+                )
+
+                if_index = int(value)
+
+            except (
+                TypeError,
+                ValueError,
+            ):
+                continue
+
+            bridge_ports[
+                bridge_port
+            ] = if_index
+
+
+        # ----------------------------------------------------
+        # Interface names
+        # ----------------------------------------------------
+
+        interface_names, interface_error = (
+            await _walk_column(
+                engine,
+                auth_data,
+                transport,
+                INTERFACE_OIDS["name"],
+            )
+        )
+
+        interface_descriptions, _ = (
+            await _walk_column(
+                engine,
+                auth_data,
+                transport,
+                INTERFACE_OIDS["description"],
+            )
+        )
+
+
+        # ----------------------------------------------------
+        # Forwarding database
+        # ----------------------------------------------------
+
+        address_rows, address_error = (
+            await _walk_raw_column(
+                engine,
+                auth_data,
+                transport,
+                BRIDGE_OIDS["fdb_address"],
+            )
+        )
+
+        port_rows, port_error = (
+            await _walk_raw_column(
+                engine,
+                auth_data,
+                transport,
+                BRIDGE_OIDS["fdb_port"],
+            )
+        )
+
+        status_rows, status_error = (
+            await _walk_raw_column(
+                engine,
+                auth_data,
+                transport,
+                BRIDGE_OIDS["fdb_status"],
+            )
+        )
+
+
+        addresses: dict[
+            tuple[int, ...],
+            str,
+        ] = {}
+
+        ports: dict[
+            tuple[int, ...],
+            int,
+        ] = {}
+
+        statuses: dict[
+            tuple[int, ...],
+            int,
+        ] = {}
+
+
+        for object_name, value in address_rows:
+            suffix = _oid_suffix(
+                object_name,
+                BRIDGE_OIDS[
+                    "fdb_address"
+                ],
+            )
+
+            if not suffix:
+                continue
+
+            mac = _format_mac(value)
+
+            if not mac:
+                mac = _mac_from_oid_suffix(
+                    suffix
+                )
+
+            if mac:
+                addresses[suffix] = mac
+
+
+        for object_name, value in port_rows:
+            suffix = _oid_suffix(
+                object_name,
+                BRIDGE_OIDS[
+                    "fdb_port"
+                ],
+            )
+
+            if not suffix:
+                continue
+
+            try:
+                ports[suffix] = int(value)
+
+            except (
+                TypeError,
+                ValueError,
+            ):
+                continue
+
+
+        for object_name, value in status_rows:
+            suffix = _oid_suffix(
+                object_name,
+                BRIDGE_OIDS[
+                    "fdb_status"
+                ],
+            )
+
+            if not suffix:
+                continue
+
+            try:
+                statuses[suffix] = int(
+                    value
+                )
+
+            except (
+                TypeError,
+                ValueError,
+            ):
+                continue
+
+
+        # ----------------------------------------------------
+        # Combine rows
+        # ----------------------------------------------------
+
+        all_indexes = (
+            set(addresses)
+            | set(ports)
+            | set(statuses)
+        )
+
+        entries = []
+
+        for index in sorted(all_indexes):
+
+            bridge_port = ports.get(index)
+
+            if_index = (
+                bridge_ports.get(
+                    bridge_port
+                )
+                if bridge_port is not None
+                else None
+            )
+
+            name = None
+
+            if if_index is not None:
+                value = interface_names.get(
+                    if_index
+                )
+
+                if value is None:
+                    value = (
+                        interface_descriptions.get(
+                            if_index
+                        )
+                    )
+
+                if value is not None:
+                    try:
+                        name = (
+                            value.prettyPrint()
+                            .strip()
+                        ) or None
+
+                    except Exception:
+                        name = str(value)
+
+
+            status_code = statuses.get(
+                index
+            )
+
+            entries.append({
+                "mac": addresses.get(
+                    index
+                ),
+
+                "bridge_port":
+                    bridge_port,
+
+                "if_index":
+                    if_index,
+
+                "interface":
+                    name,
+
+                "status": {
+                    "code":
+                        status_code,
+
+                    "state":
+                        BRIDGE_FDB_STATUS.get(
+                            status_code,
+                            "unknown",
+                        ),
+                },
+            })
+
+
+        errors = {}
+
+        for name, error in (
+            (
+                "base_port_ifindex",
+                base_error,
+            ),
+            (
+                "interface_names",
+                interface_error,
+            ),
+            (
+                "fdb_address",
+                address_error,
+            ),
+            (
+                "fdb_port",
+                port_error,
+            ),
+            (
+                "fdb_status",
+                status_error,
+            ),
+        ):
+            if error:
+                errors[name] = error
+
+
+        return {
+            "available": True,
+            "target": target,
+            "port": int(port),
+            "version": selected_version,
+
+            "bridge_port_count":
+                len(bridge_ports),
+
+            "entry_count":
+                len(entries),
+
+            "bridge_ports": [
+                {
+                    "bridge_port":
+                        bridge_port,
+
+                    "if_index":
+                        if_index,
+
+                    "interface": (
+                        (
+                            interface_names.get(
+                                if_index
+                            )
+                            or
+                            interface_descriptions.get(
+                                if_index
+                            )
+                        ).prettyPrint()
+                        if (
+                            interface_names.get(
+                                if_index
+                            )
+                            or
+                            interface_descriptions.get(
+                                if_index
+                            )
+                        )
+                        else None
+                    ),
+                }
+                for (
+                    bridge_port,
+                    if_index,
+                )
+                in sorted(
+                    bridge_ports.items()
+                )
+            ],
+
+            "forwarding_database":
+                entries,
+
+            "walk_errors":
+                errors,
+        }
+
+    except Exception as exc:
+        return {
+            "available": False,
+            "target": target,
+            "port": int(port),
+            "version": _snmp_version(
+                version
+            ),
+            "error": (
+                f"{type(exc).__name__}: "
+                f"{exc}"
+            ),
+        }
+
+    finally:
+        try:
+            engine.close_dispatcher()
+        except Exception:
+            pass
+
+
+def get_snmp_bridge(
+    target: str,
+    *,
+    version: str | None = None,
+    community: str | None = None,
+    username: str | None = None,
+    auth_password: str | None = None,
+    priv_password: str | None = None,
+    port: int = SNMP_PORT,
+    timeout: float = SNMP_TIMEOUT_SECONDS,
+    retries: int = SNMP_RETRIES,
+) -> dict[str, Any]:
+    """
+    Read BRIDGE-MIB forwarding and bridge-port tables.
+
+    This is strictly read-only and does not alter topology.
+    """
+
+    return asyncio.run(
+        _bridge_async(
+            target,
+            version=version,
+            community=community,
+            username=username,
+            auth_password=auth_password,
+            priv_password=priv_password,
+            port=port,
+            timeout=timeout,
+            retries=retries,
+        )
+    )
+
+
 def get_snmp_interfaces(
     target: str,
     *,
@@ -850,15 +1441,33 @@ if __name__ == "__main__":
         ),
     )
 
+    parser.add_argument(
+        "--bridge",
+        action="store_true",
+        help=(
+            "Walk BRIDGE-MIB forwarding "
+            "and bridge-port tables."
+        ),
+    )
+
     args = parser.parse_args()
 
-    if args.interfaces:
+    if args.bridge:
+        result = get_snmp_bridge(
+            args.target,
+            version=args.version,
+            community=args.community,
+            port=args.port,
+        )
+
+    elif args.interfaces:
         result = get_snmp_interfaces(
             args.target,
             version=args.version,
             community=args.community,
             port=args.port,
         )
+
     else:
         result = probe_snmp(
             args.target,
