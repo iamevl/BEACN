@@ -175,55 +175,123 @@
   }
 
 
-  function renderIdentityConnectionParents(
+  async function renderIdentityConnectionParents(
     selectedParent = ''
   ) {
     const currentDevice = selected();
 
-    const infrastructure =
+    const discoveredInfrastructure =
       infrastructureDevicesForIdentity()
         .filter(device =>
           device.ip !== currentDevice?.ip
         );
+
+    let manualInfrastructure = [];
+
+    try {
+      const response = await fetch(
+        '/api/infrastructure'
+      );
+
+      const payload = await response.json();
+
+      if (response.ok && payload.ok) {
+        manualInfrastructure =
+          Array.isArray(payload.infrastructure)
+            ? payload.infrastructure
+                .filter(item =>
+                  item.infrastructure_type !== 'internet'
+                )
+                .sort((left, right) =>
+                  String(left.name || '').localeCompare(
+                    String(right.name || '')
+                  )
+                )
+            : [];
+      }
+    } catch (error) {
+      console.warn(
+        'Unable to load infrastructure objects:',
+        error
+      );
+    }
 
     identityConnectionParent.innerHTML = `
       <option value="">
         Select infrastructure device
       </option>
 
-      ${infrastructure.map(device => {
-        const presentation =
-          deviceTypeDetails(
-            device.device_type || 'unknown'
-          );
+      ${
+        manualInfrastructure.length
+          ? `
+              <optgroup label="Manual infrastructure">
+                ${manualInfrastructure.map(item => {
+                  const details = [
+                    item.manufacturer,
+                    item.model,
+                    item.location
+                  ]
+                    .filter(Boolean)
+                    .join(' · ');
 
-        const name =
-          device.display_name ||
-          device.hostname ||
-          device.ip;
+                  return `
+                    <option value="${esc(item.ref)}">
+                      🏗️ ${esc(item.name)}
+                      ${details
+                        ? ` · ${esc(details)}`
+                        : ''}
+                    </option>
+                  `;
+                }).join('')}
+              </optgroup>
+            `
+          : ''
+      }
 
-        return `
-          <option value="${esc(device.ip)}">
-            ${presentation.icon}
-            ${esc(name)}
-            · ${esc(presentation.label)}
-            · ${esc(device.ip)}
-          </option>
-        `;
-      }).join('')}
+      ${
+        discoveredInfrastructure.length
+          ? `
+              <optgroup label="Discovered infrastructure">
+                ${discoveredInfrastructure.map(device => {
+                  const presentation =
+                    deviceTypeDetails(
+                      device.device_type || 'unknown'
+                    );
+
+                  const name =
+                    device.display_name ||
+                    device.hostname ||
+                    device.ip;
+
+                  return `
+                    <option
+                      value="device:${esc(device.ip)}"
+                    >
+                      ${presentation.icon}
+                      ${esc(name)}
+                      · ${esc(presentation.label)}
+                      · ${esc(device.ip)}
+                    </option>
+                  `;
+                }).join('')}
+              </optgroup>
+            `
+          : ''
+      }
     `;
 
     if (
       selectedParent &&
-      infrastructure.some(
-        device => device.ip === selectedParent
+      Array.from(
+        identityConnectionParent.options
+      ).some(option =>
+        option.value === selectedParent
       )
     ) {
       identityConnectionParent.value =
         selectedParent;
     }
   }
-
 
   function updateIdentityConnectionState() {
     const automatic =
@@ -237,7 +305,7 @@
   }
 
 
-  function openIdentityEditor() {
+  async function openIdentityEditor() {
     const device = selected();
 
     if (!device) {
@@ -259,8 +327,16 @@
     identityNotes.value =
       device.notes || '';
 
-    renderIdentityConnectionParents(
-      device.connection_parent_ip || ''
+    const selectedParent =
+      device.connection_parent_ref ||
+      (
+        device.connection_parent_ip
+          ? `device:${device.connection_parent_ip}`
+          : ''
+      );
+
+    await renderIdentityConnectionParents(
+      selectedParent
     );
 
     updateIdentityConnectionState();
@@ -321,8 +397,16 @@
               identityDeviceType.value,
             connection_method:
               identityConnectionMethod.value,
-            connection_parent_ip:
+
+            connection_parent_ref:
               identityConnectionParent.value,
+
+            connection_parent_ip:
+              identityConnectionParent.value
+                .startsWith('device:')
+                  ? identityConnectionParent.value
+                      .slice('device:'.length)
+                  : '',
             management_url:
               identityManagementUrl.value.trim(),
             notes:
