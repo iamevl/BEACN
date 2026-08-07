@@ -123,7 +123,8 @@ def devices():
                 cpu_percent, memory_percent, uptime_seconds,
                 agent_last_seen, os_name, os_version, device_type,
                 device_type_source, connection_method,
-                connection_parent_ip, connection_source,
+                connection_parent_ip, connection_parent_ref,
+                connection_source,
                 management_url, notes
             FROM devices
             ORDER BY is_online DESC, ip
@@ -154,10 +155,462 @@ def devices():
 
     payload.sort(key=device_ip_sort_key)
 
+    with db() as conn:
+        infrastructure_rows = conn.execute("""
+            SELECT
+                id,
+                name,
+                infrastructure_type,
+                manufacturer,
+                model,
+                managed,
+                port_count,
+                location,
+                management_url,
+                notes,
+                parent_ref,
+                connection_method,
+                interfaces_json,
+                created_at,
+                updated_at
+            FROM infrastructure_objects
+            ORDER BY name COLLATE NOCASE
+        """).fetchall()
+
+    infrastructure = []
+
+    for row in infrastructure_rows:
+        item = dict(row)
+
+        try:
+            item["interfaces"] = (
+                json.loads(
+                    item.pop("interfaces_json")
+                )
+                if item.get("interfaces_json")
+                else []
+            )
+        except json.JSONDecodeError:
+            item["interfaces"] = []
+            item.pop("interfaces_json", None)
+
+        item["managed"] = (
+            None
+            if item["managed"] is None
+            else bool(item["managed"])
+        )
+
+        item["object_kind"] = "infrastructure"
+        item["ref"] = f"infra:{item['id']}"
+
+        infrastructure.append(item)
+
     return jsonify({
         "devices": payload,
+        "infrastructure": infrastructure,
         "scan": scan_state,
         "subnet": NETWORK_SUBNET,
+    })
+
+
+
+INFRASTRUCTURE_TYPES = {
+    "internet",
+    "isp_gateway",
+    "router",
+    "firewall",
+    "switch",
+    "access_point",
+    "patch_panel",
+    "ups",
+    "rack",
+    "poe_injector",
+    "other",
+}
+
+
+def _infrastructure_payload(row):
+    item = dict(row)
+
+    raw_interfaces = item.pop(
+        "interfaces_json",
+        None,
+    )
+
+    try:
+        item["interfaces"] = (
+            json.loads(raw_interfaces)
+            if raw_interfaces
+            else []
+        )
+    except json.JSONDecodeError:
+        item["interfaces"] = []
+
+    item["managed"] = (
+        None
+        if item["managed"] is None
+        else bool(item["managed"])
+    )
+
+    item["object_kind"] = "infrastructure"
+    item["ref"] = f"infra:{item['id']}"
+
+    return item
+
+
+@app.get("/api/infrastructure")
+def infrastructure_list():
+    with db() as conn:
+        rows = conn.execute("""
+            SELECT *
+            FROM infrastructure_objects
+            ORDER BY name COLLATE NOCASE
+        """).fetchall()
+
+    return jsonify({
+        "ok": True,
+        "infrastructure": [
+            _infrastructure_payload(row)
+            for row in rows
+        ],
+    })
+
+
+@app.post("/api/infrastructure")
+def infrastructure_create():
+    payload = request.get_json(
+        silent=True
+    ) or {}
+
+    name = str(
+        payload.get("name", "")
+    ).strip()
+
+    infrastructure_type = str(
+        payload.get(
+            "infrastructure_type",
+            "other",
+        )
+    ).strip().lower()
+
+    manufacturer = str(
+        payload.get("manufacturer", "")
+    ).strip()
+
+    model = str(
+        payload.get("model", "")
+    ).strip()
+
+    location = str(
+        payload.get("location", "")
+    ).strip()
+
+    management_url = str(
+        payload.get("management_url", "")
+    ).strip()
+
+    notes = str(
+        payload.get("notes", "")
+    ).strip()
+
+    parent_ref = str(
+        payload.get("parent_ref", "")
+    ).strip()
+
+    connection_method = str(
+        payload.get(
+            "connection_method",
+            "wired",
+        )
+    ).strip().lower()
+
+    interfaces = payload.get(
+        "interfaces",
+        [],
+    )
+
+    managed_raw = payload.get(
+        "managed",
+        None,
+    )
+
+    managed = (
+        None
+        if managed_raw is None
+        else int(bool(managed_raw))
+    )
+
+    port_count = payload.get(
+        "port_count",
+        None,
+    )
+
+    if not name:
+        return jsonify({
+            "ok": False,
+            "error": "Infrastructure name is required.",
+        }), 400
+
+    if len(name) > 120:
+        return jsonify({
+            "ok": False,
+            "error": "Infrastructure name is too long.",
+        }), 400
+
+    if infrastructure_type not in INFRASTRUCTURE_TYPES:
+        return jsonify({
+            "ok": False,
+            "error": "Unsupported infrastructure type.",
+        }), 400
+
+    if connection_method not in {
+        "wired",
+        "wireless",
+        "virtual",
+        "unknown",
+    }:
+        return jsonify({
+            "ok": False,
+            "error": "Unsupported connection method.",
+        }), 400
+
+    if (
+        management_url
+        and not (
+            management_url.startswith("http://")
+            or management_url.startswith("https://")
+        )
+    ):
+        return jsonify({
+            "ok": False,
+            "error": (
+                "Management URL must begin with "
+                "http:// or https://."
+            ),
+        }), 400
+
+    if not isinstance(interfaces, list):
+        return jsonify({
+            "ok": False,
+            "error": "Interfaces must be a list.",
+        }), 400
+
+    if port_count not in (None, ""):
+        try:
+            port_count = int(port_count)
+        except (TypeError, ValueError):
+            return jsonify({
+                "ok": False,
+                "error": "Port count must be numeric.",
+            }), 400
+
+        if port_count < 0 or port_count > 4096:
+            return jsonify({
+                "ok": False,
+                "error": "Port count is outside the allowed range.",
+            }), 400
+    else:
+        port_count = None
+
+    object_id = str(uuid4())
+    now = utc_now()
+
+    with db_write_lock:
+        with db() as conn:
+            conn.execute("""
+                INSERT INTO infrastructure_objects (
+                    id,
+                    name,
+                    infrastructure_type,
+                    manufacturer,
+                    model,
+                    managed,
+                    port_count,
+                    location,
+                    management_url,
+                    notes,
+                    parent_ref,
+                    connection_method,
+                    interfaces_json,
+                    created_at,
+                    updated_at
+                )
+                VALUES (
+                    ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
+                )
+            """, (
+                object_id,
+                name,
+                infrastructure_type,
+                manufacturer or None,
+                model or None,
+                managed,
+                port_count,
+                location or None,
+                management_url or None,
+                notes or None,
+                parent_ref or None,
+                connection_method,
+                json.dumps(
+                    interfaces,
+                    separators=(",", ":"),
+                ),
+                now,
+                now,
+            ))
+
+            row = conn.execute(
+                """
+                SELECT *
+                FROM infrastructure_objects
+                WHERE id = ?
+                """,
+                (object_id,),
+            ).fetchone()
+
+            conn.commit()
+
+    return jsonify({
+        "ok": True,
+        "infrastructure":
+            _infrastructure_payload(row),
+    }), 201
+
+
+@app.patch("/api/infrastructure/<object_id>")
+def infrastructure_update(object_id):
+    payload = request.get_json(
+        silent=True
+    ) or {}
+
+    allowed = {
+        "name",
+        "infrastructure_type",
+        "manufacturer",
+        "model",
+        "managed",
+        "port_count",
+        "location",
+        "management_url",
+        "notes",
+        "parent_ref",
+        "connection_method",
+        "interfaces",
+    }
+
+    updates = {
+        key: value
+        for key, value in payload.items()
+        if key in allowed
+    }
+
+    if not updates:
+        return jsonify({
+            "ok": False,
+            "error": "No supported fields supplied.",
+        }), 400
+
+    with db_write_lock:
+        with db() as conn:
+            existing = conn.execute(
+                """
+                SELECT *
+                FROM infrastructure_objects
+                WHERE id = ?
+                """,
+                (object_id,),
+            ).fetchone()
+
+            if not existing:
+                return jsonify({
+                    "ok": False,
+                    "error": (
+                        "Infrastructure object not found."
+                    ),
+                }), 404
+
+            current = dict(existing)
+
+            for key, value in updates.items():
+                if key == "interfaces":
+                    current["interfaces_json"] = (
+                        json.dumps(
+                            value or [],
+                            separators=(",", ":"),
+                        )
+                    )
+                    continue
+
+                current[key] = value
+
+            if (
+                current["infrastructure_type"]
+                not in INFRASTRUCTURE_TYPES
+            ):
+                return jsonify({
+                    "ok": False,
+                    "error": (
+                        "Unsupported infrastructure type."
+                    ),
+                }), 400
+
+            current["managed"] = (
+                None
+                if current["managed"] is None
+                else int(bool(current["managed"]))
+            )
+
+            current["updated_at"] = utc_now()
+
+            conn.execute("""
+                UPDATE infrastructure_objects
+                SET
+                    name = ?,
+                    infrastructure_type = ?,
+                    manufacturer = ?,
+                    model = ?,
+                    managed = ?,
+                    port_count = ?,
+                    location = ?,
+                    management_url = ?,
+                    notes = ?,
+                    parent_ref = ?,
+                    connection_method = ?,
+                    interfaces_json = ?,
+                    updated_at = ?
+                WHERE id = ?
+            """, (
+                current["name"],
+                current["infrastructure_type"],
+                current["manufacturer"],
+                current["model"],
+                current["managed"],
+                current["port_count"],
+                current["location"],
+                current["management_url"],
+                current["notes"],
+                current["parent_ref"],
+                current["connection_method"],
+                current["interfaces_json"],
+                current["updated_at"],
+                object_id,
+            ))
+
+            row = conn.execute(
+                """
+                SELECT *
+                FROM infrastructure_objects
+                WHERE id = ?
+                """,
+                (object_id,),
+            ).fetchone()
+
+            conn.commit()
+
+    return jsonify({
+        "ok": True,
+        "infrastructure":
+            _infrastructure_payload(row),
     })
 
 
@@ -257,6 +710,10 @@ def update_device_identity(target):
         payload.get("connection_parent_ip", "")
     ).strip()
 
+    connection_parent_ref = str(
+        payload.get("connection_parent_ref", "")
+    ).strip()
+
     management_url = str(
         payload.get("management_url", "")
     ).strip()
@@ -319,12 +776,49 @@ def update_device_identity(target):
 
     if connection_method == "automatic":
         connection_parent_ip = ""
+        connection_parent_ref = ""
+
+    # Backward compatibility:
+    # existing manually assigned devices still use parent IP.
+    if connection_parent_ip and not connection_parent_ref:
+        connection_parent_ref = (
+            f"device:{connection_parent_ip}"
+        )
 
     if connection_parent_ip and not valid_target(connection_parent_ip):
         return jsonify({
             "ok": False,
             "error": "Invalid parent device.",
         }), 400
+
+    if connection_parent_ref.startswith("infra:"):
+        infrastructure_id = (
+            connection_parent_ref.split(
+                ":",
+                1,
+            )[1]
+        )
+
+        with db() as conn:
+            infrastructure_parent = conn.execute(
+                """
+                SELECT id
+                FROM infrastructure_objects
+                WHERE id = ?
+                """,
+                (infrastructure_id,),
+            ).fetchone()
+
+        if not infrastructure_parent:
+            return jsonify({
+                "ok": False,
+                "error": (
+                    "Infrastructure parent was not found."
+                ),
+            }), 400
+
+        # An infrastructure parent replaces the legacy IP parent.
+        connection_parent_ip = ""
 
     if connection_parent_ip == target:
         return jsonify({
@@ -382,6 +876,7 @@ def update_device_identity(target):
                     device_type_source = 'manual',
                     connection_method = ?,
                     connection_parent_ip = NULLIF(?, ''),
+                    connection_parent_ref = NULLIF(?, ''),
                     connection_source = CASE
                         WHEN ? = 'automatic'
                         THEN 'inferred'
@@ -395,6 +890,7 @@ def update_device_identity(target):
                 device_type,
                 connection_method,
                 connection_parent_ip,
+                connection_parent_ref,
                 connection_method,
                 management_url,
                 notes,
@@ -412,6 +908,7 @@ def update_device_identity(target):
                     device_type_source,
                     connection_method,
                     connection_parent_ip,
+                    connection_parent_ref,
                     connection_source,
                     management_url,
                     notes

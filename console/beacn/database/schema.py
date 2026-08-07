@@ -13,6 +13,7 @@ DEVICE_COLUMN_MIGRATIONS = {
     "device_type_source": "TEXT",
     "connection_method": "TEXT",
     "connection_parent_ip": "TEXT",
+    "connection_parent_ref": "TEXT",
     "connection_source": "TEXT",
     "management_url": "TEXT",
     "notes": "TEXT",
@@ -109,6 +110,37 @@ def initialise_schema(conn: sqlite3.Connection) -> None:
         confidence REAL,
         observed_at TEXT NOT NULL
     );
+
+
+    CREATE TABLE IF NOT EXISTS infrastructure_objects (
+        id TEXT PRIMARY KEY,
+        name TEXT NOT NULL,
+        infrastructure_type TEXT NOT NULL,
+
+        manufacturer TEXT,
+        model TEXT,
+
+        managed INTEGER,
+        port_count INTEGER,
+        location TEXT,
+
+        management_url TEXT,
+        notes TEXT,
+
+        parent_ref TEXT,
+        connection_method TEXT NOT NULL DEFAULT 'wired',
+
+        interfaces_json TEXT,
+
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_infrastructure_parent
+    ON infrastructure_objects(parent_ref);
+
+    CREATE INDEX IF NOT EXISTS idx_infrastructure_type
+    ON infrastructure_objects(infrastructure_type);
 
     CREATE INDEX IF NOT EXISTS idx_telemetry_target_created
     ON telemetry_history(target_ip, created_at);
