@@ -240,7 +240,7 @@ const primaryFanRpm = finite(primaryFan?.value);
   }
 
 
-  function render(device, agent) {
+  function render(device, agent, snmp = null) {
     renderDeviceHeroIdentity(device);
 
     const os = agent?.operating_system;
@@ -386,6 +386,21 @@ const primaryFanRpm = finite(primaryFan?.value);
         deviceRelationshipInspector(device)
       );
 
+      const topologyPanel =
+        networkPanel.querySelector(
+          '.relationship-inspector'
+        );
+
+      if (
+        topologyPanel &&
+        typeof renderSnmpPanel === 'function'
+      ) {
+        topologyPanel.insertAdjacentHTML(
+          'afterend',
+          renderSnmpPanel(snmp)
+        );
+      }
+
       bindDeviceProfileLinks();
     }
 
@@ -426,7 +441,11 @@ const primaryFanRpm = finite(primaryFan?.value);
     document.getElementById('liveToggle')?.addEventListener('click', () => {
       liveEnabled = !liveEnabled;
       configureLivePolling();
-      render(current?.device || device, current?.agent || agent);
+      render(
+        current?.device || device,
+        current?.agent || agent,
+        current?.snmp || snmp
+      );
       drawTelemetryChart();
     });
 

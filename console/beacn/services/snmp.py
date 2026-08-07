@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import asyncio
 import os
+import threading
+import time
 from typing import Any
 
 from pysnmp.hlapi.v3arch.asyncio import (
@@ -871,3 +873,227 @@ if __name__ == "__main__":
             indent=2,
         )
     )
+
+
+
+# BEACN SNMP snapshot cache
+
+SNMP_CACHE_TTL_SECONDS = int(
+    os.environ.get(
+        "BEACN_SNMP_CACHE_TTL_SECONDS",
+        "300",
+    )
+)
+
+_snmp_cache_lock = threading.Lock()
+_snmp_cache: dict[str, dict[str, Any]] = {}
+
+
+def _env_enabled(
+    name: str,
+    default: bool = False,
+) -> bool:
+    value = os.environ.get(name)
+
+    if value is None:
+        return default
+
+    return value.strip().lower() in {
+        "1",
+        "true",
+        "yes",
+        "on",
+    }
+
+
+def snmp_configured() -> bool:
+    if not _env_enabled(
+        "BEACN_SNMP_ENABLED",
+        False,
+    ):
+        return False
+
+    version = _snmp_version(None)
+
+    if version == "3":
+        return all([
+            os.environ.get(
+                "BEACN_SNMP_USERNAME",
+                "",
+            ).strip(),
+            os.environ.get(
+                "BEACN_SNMP_AUTH_PASSWORD",
+                "",
+            ),
+            os.environ.get(
+                "BEACN_SNMP_PRIV_PASSWORD",
+                "",
+            ),
+        ])
+
+    if version == "2c":
+        return bool(
+            os.environ.get(
+                "BEACN_SNMP_COMMUNITY",
+                "",
+            ).strip()
+        )
+
+    return False
+
+
+def _meaningful_interfaces(
+    interfaces: list[dict[str, Any]],
+) -> list[dict[str, Any]]:
+    hidden_names = {
+        "lo",
+        "sit0",
+    }
+
+    result = []
+
+    for interface in interfaces:
+        name = str(
+            interface.get("name") or ""
+        ).strip()
+
+        if name in hidden_names:
+            continue
+
+        item = dict(interface)
+
+        item["kind"] = (
+            "logical"
+            if (
+                name.startswith("bond")
+                or name.startswith("br")
+                or name.startswith("team")
+            )
+            else "physical"
+        )
+
+        result.append(item)
+
+    return result
+
+
+def get_snmp_snapshot(
+    target: str,
+    *,
+    force: bool = False,
+) -> dict[str, Any]:
+    """
+    Return cached read-only SNMP enrichment for a device.
+
+    Credentials remain in process environment and are never
+    returned in this payload.
+    """
+
+    target = str(target or "").strip()
+
+    if not snmp_configured():
+        return {
+            "configured": False,
+            "available": False,
+            "target": target,
+        }
+
+    now = time.monotonic()
+
+    if not force:
+        with _snmp_cache_lock:
+            cached = _snmp_cache.get(target)
+
+            if cached:
+                age = (
+                    now -
+                    float(
+                        cached.get(
+                            "_cached_at",
+                            0,
+                        )
+                    )
+                )
+
+                if age < SNMP_CACHE_TTL_SECONDS:
+                    payload = dict(cached)
+                    payload.pop(
+                        "_cached_at",
+                        None,
+                    )
+                    payload["cached"] = True
+                    payload["cache_age_seconds"] = round(
+                        age,
+                        1,
+                    )
+                    return payload
+
+    system = probe_snmp(target)
+
+    if not system.get("available"):
+        payload = {
+            "configured": True,
+            "available": False,
+            "target": target,
+            "version": system.get("version"),
+            "error": system.get(
+                "error",
+                "No SNMP response.",
+            ),
+        }
+
+    else:
+        interfaces = get_snmp_interfaces(
+            target
+        )
+
+        raw_interfaces = (
+            interfaces.get("interfaces")
+            if interfaces.get("available")
+            else []
+        ) or []
+
+        payload = {
+            "configured": True,
+            "available": True,
+            "target": target,
+            "version": system.get(
+                "version",
+            ),
+            "security": (
+                "authPriv"
+                if system.get("version") == "3"
+                else "community"
+            ),
+            "system": system.get(
+                "system",
+                {},
+            ),
+            "interfaces": _meaningful_interfaces(
+                raw_interfaces
+            ),
+            "interface_count": len(
+                _meaningful_interfaces(
+                    raw_interfaces
+                )
+            ),
+            "raw_interface_count": len(
+                raw_interfaces
+            ),
+            "interface_error": (
+                None
+                if interfaces.get("available")
+                else interfaces.get("error")
+            ),
+        }
+
+    cache_record = dict(payload)
+    cache_record["_cached_at"] = now
+
+    with _snmp_cache_lock:
+        _snmp_cache[target] = cache_record
+
+    payload["cached"] = False
+    payload["cache_age_seconds"] = 0
+
+    return payload

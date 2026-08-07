@@ -24,6 +24,17 @@ services:
       DOCKER_TIMEOUT_SECONDS: "5"
       TZ: "Europe/London"
 
+      # Optional SNMP enrichment.
+      # Values come from the local .env file and are never
+      # committed to source control.
+      BEACN_SNMP_ENABLED: "${BEACN_SNMP_ENABLED:-false}"
+      BEACN_SNMP_VERSION: "${BEACN_SNMP_VERSION:-3}"
+      BEACN_SNMP_USERNAME: "${BEACN_SNMP_USERNAME:-}"
+      BEACN_SNMP_AUTH_PASSWORD: "${BEACN_SNMP_AUTH_PASSWORD:-}"
+      BEACN_SNMP_PRIV_PASSWORD: "${BEACN_SNMP_PRIV_PASSWORD:-}"
+      BEACN_SNMP_COMMUNITY: "${BEACN_SNMP_COMMUNITY:-}"
+      BEACN_SNMP_CACHE_TTL_SECONDS: "${BEACN_SNMP_CACHE_TTL_SECONDS:-300}"
+
     volumes:
       - ./data:/data
       - /var/run/docker.sock:/var/run/docker.sock:ro

@@ -17,6 +17,7 @@ from flask import Flask, jsonify, render_template, request
 
 from beacn.database import initialise_schema
 from beacn.services.health import get_health_summary
+from beacn.services.snmp import get_snmp_snapshot
 try:
     from docker.errors import DockerException
 except ImportError:
@@ -483,6 +484,10 @@ def device_details(target):
                 except json.JSONDecodeError:
                     agent_payload = None
 
+    snmp_payload = get_snmp_snapshot(
+        target
+    )
+
     return jsonify({
         "ok": True,
         "device": {
@@ -491,6 +496,7 @@ def device_details(target):
             if key != "agent_payload"
         },
         "agent": agent_payload,
+        "snmp": snmp_payload,
     })
 
 

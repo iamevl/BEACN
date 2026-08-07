@@ -3878,4 +3878,150 @@ button.relationship-path-device:hover {
   font-weight: 400;
 }
 
+/* SNMP Device Enrichment */
+
+.snmp-panel {
+  margin: 0 0 18px;
+  padding: 16px;
+
+  border: 1px solid var(--border);
+  border-radius: 14px;
+
+  background:
+    color-mix(
+      in srgb,
+      var(--panel2) 76%,
+      transparent
+    );
+}
+
+.snmp-panel-heading {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 14px;
+
+  margin-bottom: 12px;
+}
+
+.snmp-panel-heading h3 {
+  margin: 0;
+}
+
+.snmp-panel-heading p {
+  margin: 4px 0 0;
+}
+
+.snmp-system-strip {
+  display: grid;
+  grid-template-columns:
+    repeat(auto-fit, minmax(160px, 1fr));
+  gap: 10px;
+}
+
+.snmp-system-strip > div {
+  padding: 10px 11px;
+
+  border: 1px solid var(--border);
+  border-radius: 10px;
+
+  background: var(--panel);
+}
+
+.snmp-system-strip small {
+  display: block;
+  margin-bottom: 4px;
+
+  color: var(--muted);
+
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: .05em;
+}
+
+.snmp-system-strip strong {
+  display: block;
+
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.snmp-description {
+  margin-top: 10px;
+  padding: 10px 11px;
+
+  border-radius: 9px;
+
+  background:
+    color-mix(
+      in srgb,
+      var(--panel) 72%,
+      transparent
+    );
+
+  color: var(--muted);
+
+  font-family:
+    ui-monospace,
+    SFMono-Regular,
+    Menlo,
+    Monaco,
+    Consolas,
+    monospace;
+
+  font-size: 11px;
+}
+
+.snmp-interface-heading {
+  margin: 16px 0 9px;
+}
+
+.snmp-interface-grid {
+  display: grid;
+  grid-template-columns:
+    repeat(auto-fit, minmax(210px, 1fr));
+  gap: 10px;
+}
+
+.snmp-interface-card {
+  padding: 11px 12px;
+
+  border: 1px solid var(--border);
+  border-radius: 10px;
+
+  background: var(--panel);
+}
+
+.snmp-interface-kind {
+  margin-top: 3px;
+  font-size: 10px;
+}
+
+.snmp-interface-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 9px;
+
+  margin-top: 10px;
+
+  font-size: 11px;
+}
+
+.snmp-interface-mac {
+  margin-top: 7px;
+
+  color: var(--muted);
+
+  font-family:
+    ui-monospace,
+    SFMono-Regular,
+    Menlo,
+    Monaco,
+    Consolas,
+    monospace;
+
+  font-size: 10px;
+}
+
 

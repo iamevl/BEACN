@@ -37,7 +37,7 @@
     const device = selected();
     if (!device) {
       current = null;
-      render(null, null);
+      render(null, null, null);
       return;
     }
 
@@ -60,7 +60,11 @@
       ? payload
       : {device, agent: null};
 
-    render(current.device || device, current.agent);
+    render(
+      current.device || device,
+      current.agent,
+      current.snmp || null
+    );
     history(current.device || device);
     await loadTelemetry();
     await loadDocker(false);
