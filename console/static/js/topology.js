@@ -393,6 +393,20 @@ function topologyClientList(clients) {
 
 
 function renderInfrastructureColumn(branch) {
+    const childInfrastructure =
+        Array.isArray(branch.infrastructure)
+            ? branch.infrastructure
+            : [];
+
+    const clients =
+        Array.isArray(branch.clients)
+            ? branch.clients
+            : [];
+
+    const hasChildren =
+        childInfrastructure.length ||
+        clients.length;
+
     return `
         <section class="topology-infrastructure-column">
           <div class="topology-infrastructure-root">
@@ -402,27 +416,72 @@ function renderInfrastructureColumn(branch) {
             )}
           </div>
 
-          <div class="topology-infrastructure-line"></div>
+          ${
+              hasChildren
+                  ? `
+                      <div
+                        class="topology-infrastructure-line"
+                        aria-hidden="true"
+                      ></div>
+                    `
+                  : ''
+          }
 
-          <div class="topology-client-stack">
-            ${
-                branch.focusedRoot
-                    ? `
-                        <div class="topology-path-end">
-                          Selected infrastructure node
-                        </div>
-                      `
-                    : topologyClientList(
-                        topologySortDevices(
-                            branch.clients
-                        )
-                    )
-            }
-          </div>
+          ${
+              branch.focusedRoot
+                  ? `
+                      <div class="topology-path-end">
+                        Selected infrastructure node
+                      </div>
+                    `
+                  : `
+                      ${
+                          clients.length
+                              ? `
+                                  <div class="topology-client-stack">
+                                    ${topologyClientList(
+                                        topologySortDevices(
+                                            clients
+                                        )
+                                    )}
+                                  </div>
+                                `
+                              : ''
+                      }
+
+                      ${
+                          childInfrastructure.length
+                              ? `
+                                  <div
+                                    class="topology-nested-infrastructure"
+                                  >
+                                    ${childInfrastructure
+                                        .map(
+                                            renderInfrastructureColumn
+                                        )
+                                        .join('')}
+                                  </div>
+                                `
+                              : ''
+                      }
+
+                      ${
+                          !clients.length &&
+                          !childInfrastructure.length
+                              ? `
+                                  <div
+                                    class="topology-empty-branch"
+                                  >
+                                    No connected devices assigned.
+                                  </div>
+                                `
+                              : ''
+                      }
+                    `
+          }
         </section>
     `;
 }
-
 
 function renderDirectClientGroup(devices, _label) {
     if (!devices.length) {
@@ -503,6 +562,26 @@ function renderWiredColumn(column) {
 
             <div>
               <strong>${column.label}</strong>
+
+              ${
+                  column.relationshipResolved === false
+                      ? `
+                          <small>
+                            Parent relationship not yet resolved
+                          </small>
+                        `
+                      : ''
+              }
+
+              ${
+                  column.relationshipResolved === false
+                      ? `
+                          <small>
+                            Parent relationship not yet resolved
+                          </small>
+                        `
+                      : ''
+              }
               <small>Router wired connections</small>
             </div>
           </div>
@@ -896,6 +975,234 @@ async function selectTopologyDevice(ip) {
 }
 
 
+function topologyUpstreamInfrastructureLabel(node) {
+    const type =
+        node?.device?.infrastructure_type;
+
+    const labels = {
+        isp_gateway: 'ISP Gateway',
+        router: 'Router',
+        firewall: 'Firewall',
+        switch: 'Network switch',
+        internet: 'Internet'
+    };
+
+    return (
+        labels[type] ||
+        deviceTypeDetails(
+            node?.device?.device_type ||
+            'unknown'
+        ).label
+    );
+}
+
+
+function topologyUpstreamInfrastructureIcon(node) {
+    const type =
+        node?.device?.infrastructure_type;
+
+    const icons = {
+        isp_gateway: '🌐',
+        firewall: '🛡️',
+        switch: '🔀',
+        router: '🛜'
+    };
+
+    return (
+        icons[type] ||
+        deviceTypeDetails(
+            node?.device?.device_type ||
+            'unknown'
+        ).icon
+    );
+}
+
+
+function renderTopologyUpstreamNode(
+    node,
+    primaryRouter
+) {
+    const device = node?.device;
+
+    if (!device) {
+        return '';
+    }
+
+    const isInternet =
+        device.infrastructure_type ===
+            'internet';
+
+    if (isInternet) {
+        return `
+            <div class="topology-internet-row">
+              <div class="topology-internet-node">
+                <span aria-hidden="true">🌍</span>
+                <strong>
+                  ${esc(
+                      device.display_name ||
+                      'Internet'
+                  )}
+                </strong>
+              </div>
+            </div>
+        `;
+    }
+
+    const isPrimaryRouter =
+        primaryRouter &&
+        (
+            node.ref ===
+                `device:${primaryRouter.ip}` ||
+            device.ip === primaryRouter.ip
+        );
+
+    if (isPrimaryRouter) {
+        return `
+            <div class="topology-router-row">
+              ${topologyDeviceButton(
+                  primaryRouter,
+                  'topology-router-node'
+              )}
+            </div>
+        `;
+    }
+
+    const ip =
+        String(device.ip || '').trim();
+
+    const makeModel = [
+        device.manufacturer,
+        device.model
+    ]
+        .filter(Boolean)
+        .join(' ');
+
+    return `
+        <div class="topology-upstream-object-row">
+          <div
+            class="
+              topology-node
+              topology-device-node
+              topology-upstream-object
+              online
+            "
+          >
+            <span
+              class="topology-node-icon"
+              aria-hidden="true"
+            >
+              ${topologyUpstreamInfrastructureIcon(
+                  node
+              )}
+            </span>
+
+            <span class="topology-node-copy">
+              <strong>
+                ${esc(
+                    topologyDeviceName(device)
+                )}
+              </strong>
+
+              <small
+                class="topology-device-type-label"
+              >
+                ${esc(
+                    topologyUpstreamInfrastructureLabel(
+                        node
+                    )
+                )}
+              </small>
+
+              ${
+                  makeModel
+                      ? `
+                          <small>
+                            ${esc(makeModel)}
+                          </small>
+                        `
+                      : ''
+              }
+
+              ${
+                  ip
+                      ? `
+                          <span class="topology-addresses">
+                            <span
+                              class="topology-address-row"
+                            >
+                              <span
+                                class="topology-address-label"
+                              >
+                                IP
+                              </span>
+
+                              <span
+                                class="topology-address-value"
+                              >
+                                ${esc(ip)}
+                              </span>
+                            </span>
+                          </span>
+                        `
+                      : ''
+              }
+            </span>
+          </div>
+        </div>
+    `;
+}
+
+
+function renderTopologyUpstream(model) {
+    const path =
+        Array.isArray(model.upstreamPath)
+            ? model.upstreamPath
+            : [];
+
+    if (!path.length) {
+        return `
+            <div class="topology-internet-row">
+              <div class="topology-internet-node">
+                <span aria-hidden="true">🌍</span>
+                <strong>Internet</strong>
+              </div>
+            </div>
+
+            <div class="topology-trunk-line"></div>
+
+            <div class="topology-router-row">
+              ${topologyDeviceButton(
+                  model.primaryRouter,
+                  'topology-router-node'
+              )}
+            </div>
+        `;
+    }
+
+    return `
+        <div class="topology-upstream-chain">
+          ${path.map((node, index) => `
+              ${renderTopologyUpstreamNode(
+                  node,
+                  model.primaryRouter
+              )}
+
+              ${
+                  index < path.length - 1
+                      ? `
+                          <div
+                            class="topology-upstream-link"
+                            aria-hidden="true"
+                          ></div>
+                        `
+                      : ''
+              }
+          `).join('')}
+        </div>
+    `;
+}
+
+
 function refreshTopology() {
     const stage =
         document.getElementById('topologyStage');
@@ -991,18 +1298,7 @@ function refreshTopology() {
                 : ''}
           "
         >
-          <div class="topology-internet-row">
-            <div class="topology-internet-node">
-              <span aria-hidden="true">🌍</span>
-              <strong>Internet</strong>
-            </div>
-          </div>
-
-          <div class="topology-trunk-line"></div>
-
-          <div class="topology-router-row">
-            ${router}
-          </div>
+          ${renderTopologyUpstream(model)}
 
           ${renderCoreServices(model)}
 

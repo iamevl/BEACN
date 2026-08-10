@@ -258,7 +258,8 @@
     const payload = await response.json();
     const oldValue = select.value;
 
-    devices = payload.devices;
+    devices = payload.devices || [];
+    infrastructure = payload.infrastructure || [];
     renderDeviceOptions(oldValue);
 
     if (typeof refreshTopology === 'function') {

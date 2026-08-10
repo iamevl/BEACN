@@ -175,7 +175,7 @@
   }
 
 
-  async function renderIdentityConnectionParents(
+  function renderIdentityConnectionParents(
     selectedParent = ''
   ) {
     const currentDevice = selected();
@@ -186,39 +186,24 @@
           device.ip !== currentDevice?.ip
         );
 
-    let manualInfrastructure = [];
-
-    try {
-      const response = await fetch(
-        '/api/infrastructure'
-      );
-
-      const payload = await response.json();
-
-      if (response.ok && payload.ok) {
-        manualInfrastructure =
-          Array.isArray(payload.infrastructure)
-            ? payload.infrastructure
-                .filter(item =>
-                  item.infrastructure_type !== 'internet'
+    const manualInfrastructure =
+      Array.isArray(infrastructure)
+        ? [...infrastructure]
+            .filter(item =>
+              item.infrastructure_type !==
+                'internet'
+            )
+            .sort((left, right) =>
+              String(left.name || '')
+                .localeCompare(
+                  String(right.name || '')
                 )
-                .sort((left, right) =>
-                  String(left.name || '').localeCompare(
-                    String(right.name || '')
-                  )
-                )
-            : [];
-      }
-    } catch (error) {
-      console.warn(
-        'Unable to load infrastructure objects:',
-        error
-      );
-    }
+            )
+        : [];
 
     identityConnectionParent.innerHTML = `
       <option value="">
-        Select infrastructure device
+        Select infrastructure
       </option>
 
       ${
@@ -235,11 +220,15 @@
                     .join(' · ');
 
                   return `
-                    <option value="${esc(item.ref)}">
+                    <option
+                      value="${esc(item.ref)}"
+                    >
                       🏗️ ${esc(item.name)}
-                      ${details
-                        ? ` · ${esc(details)}`
-                        : ''}
+                      ${
+                        details
+                          ? ` · ${esc(details)}`
+                          : ''
+                      }
                     </option>
                   `;
                 }).join('')}
@@ -255,7 +244,8 @@
                 ${discoveredInfrastructure.map(device => {
                   const presentation =
                     deviceTypeDetails(
-                      device.device_type || 'unknown'
+                      device.device_type ||
+                      'unknown'
                     );
 
                   const name =

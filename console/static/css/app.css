@@ -4024,4 +4024,54 @@ button.relationship-path-device:hover {
   font-size: 10px;
 }
 
+/* Nested topology infrastructure */
+
+.topology-nested-infrastructure {
+  display: grid;
+  gap: 14px;
+  margin-top: 14px;
+}
+
+.topology-nested-infrastructure
+.topology-infrastructure-column {
+  position: relative;
+}
+
+.topology-nested-infrastructure
+.topology-infrastructure-root {
+  margin-top: 2px;
+}
+
+/* Dynamic upstream topology */
+
+.topology-upstream-chain {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.topology-upstream-link {
+  width: 2px;
+  height: 28px;
+  margin: 0 auto;
+
+  background:
+    linear-gradient(
+      to bottom,
+      rgba(94,234,212,.8),
+      rgba(56,189,248,.55)
+    );
+}
+
+.topology-upstream-object-row {
+  display: flex;
+  justify-content: center;
+  width: 100%;
+}
+
+.topology-upstream-object {
+  min-width: 260px;
+  max-width: 360px;
+}
+
 

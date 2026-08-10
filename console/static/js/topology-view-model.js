@@ -38,6 +38,59 @@ function topologyTreeInfrastructureChildren(node) {
 }
 
 
+function topologyTreeInfrastructureBranch(node) {
+    if (!node) {
+        return null;
+    }
+
+    const infrastructureChildren =
+        topologyTreeInfrastructureChildren(node)
+            /*
+             * Access points keep their true parent relationship
+             * in the canonical topology tree, but they are
+             * presented exclusively in the dedicated WAP columns.
+             *
+             * This prevents a wired WAP from appearing once under
+             * its switch and again as an access-point column.
+             */
+            .filter(child =>
+                child.device?.device_type !==
+                'access_point'
+            )
+            .map(child =>
+                topologyTreeInfrastructureBranch(
+                    child
+                )
+            )
+            .filter(Boolean);
+
+    return {
+        device: node.device,
+
+        clients: topologySortDevices(
+            topologyTreeEndpointChildren(node)
+        ),
+
+        infrastructure:
+            infrastructureChildren,
+
+        treeNode: node,
+
+        parentIp:
+            node.parent?.ip || '',
+
+        parentRef:
+            node.parent?.ref || '',
+
+        connectionMethod:
+            node.transport,
+
+        relationshipSource:
+            node.relationship.source
+    };
+}
+
+
 function topologyTreeToViewModel(tree) {
     if (!tree) {
         throw new Error(
@@ -50,8 +103,16 @@ function topologyTreeToViewModel(tree) {
         : [];
 
     const primaryRouter =
+        tree.primaryRouter?.device ||
         tree.root?.device ||
         topologySyntheticRouter();
+
+    const upstreamPath =
+        tree.primaryRouter
+            ? tree.pathTo(
+                tree.primaryRouter.ref
+              )
+            : [];
 
     const coreServiceIps = new Set(
         (tree.coreServices || []).map(service =>
@@ -84,24 +145,26 @@ function topologyTreeToViewModel(tree) {
      * incorrectly rendered as an endpoint of that switch.
      */
     const wiredSwitches =
-        switchNodes.map(node => ({
-            device: node.device,
-
-            clients: topologySortDevices(
-                topologyTreeEndpointChildren(node)
-            ),
-
-            treeNode: node,
-
-            parentIp:
-                node.parent?.ip || '',
-
-            connectionMethod:
-                node.transport,
-
-            relationshipSource:
-                node.relationship.source
-        }));
+        switchNodes
+            .filter(node => {
+                /*
+                 * Only switches whose parent is NOT another switch
+                 * become top-level branches under Wired.
+                 *
+                 * Child switches are rendered recursively beneath
+                 * their actual parent switch.
+                 */
+                return (
+                    node.parent?.device?.device_type !==
+                    'switch'
+                );
+            })
+            .map(node =>
+                topologyTreeInfrastructureBranch(
+                    node
+                )
+            )
+            .filter(Boolean);
 
     /*
      * Direct router-connected endpoint devices.
@@ -140,6 +203,17 @@ function topologyTreeToViewModel(tree) {
         accessPointNodes
             .map(node => {
                 const parentNode = node.parent;
+
+                /*
+                 * An AP is known infrastructure even when BEACN
+                 * cannot yet prove its physical parent.
+                 *
+                 * It therefore receives its own topology column
+                 * rather than remaining an ordinary unassigned
+                 * endpoint.
+                 */
+                const relationshipResolved =
+                    Boolean(parentNode);
 
                 const wirelessBackhaul =
                     node.transport === 'wireless' &&
@@ -196,6 +270,11 @@ function topologyTreeToViewModel(tree) {
 
                     relationshipConfidence:
                         node.relationship.confidence,
+
+                    relationshipResolved,
+
+                    relationshipReason:
+                        node.relationship.reason,
 
                     treeNode: node
                 };
@@ -283,6 +362,10 @@ function topologyTreeToViewModel(tree) {
     const unassigned =
         topologySortDevices(
             (tree.unassigned || [])
+                .filter(node =>
+                    node.device?.device_type !==
+                    'access_point'
+                )
                 .map(node => node.device)
         );
 
@@ -295,6 +378,8 @@ function topologyTreeToViewModel(tree) {
             ).length,
 
         primaryRouter,
+
+        upstreamPath,
 
         columns,
 
@@ -331,6 +416,9 @@ function buildTopologyModel() {
         buildTopologyTree(
             Array.isArray(devices)
                 ? devices
+                : [],
+            Array.isArray(infrastructure)
+                ? infrastructure
                 : []
         );
 

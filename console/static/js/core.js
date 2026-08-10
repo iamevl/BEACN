@@ -1,4 +1,5 @@
 let devices = [];
+let infrastructure = [];
   let activeDeviceTypeFilter = null;
   let current = null;
   let activeTab = 'overview';
