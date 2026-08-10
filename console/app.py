@@ -6,16 +6,38 @@ import socket
 import sqlite3
 import subprocess
 import threading
+import hashlib
+import secrets
+import smtplib
+import ssl
 import urllib.error
 import urllib.request
 from contextlib import nullcontext
+from email.message import EmailMessage
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from uuid import uuid4
 
-from flask import Flask, jsonify, render_template, request
+from flask import (
+    Flask,
+    jsonify,
+    redirect,
+    render_template,
+    request,
+    session,
+    url_for,
+)
+from werkzeug.security import (
+    check_password_hash,
+    generate_password_hash,
+)
 
 from beacn.database import initialise_schema
+from beacn.database.schema import (
+    initialise_auth_schema,
+    initialise_password_recovery_schema,
+    initialise_security_settings_schema,
+)
 from beacn.services.health import get_health_summary
 from beacn.relationships.manager import RelationshipManager
 from beacn.relationships.providers.generic import GenericProvider
@@ -89,12 +111,1079 @@ from beacn.common import (
     utc_now,
 )
 
+def _load_or_create_secret_key():
+    """
+    Persist the Flask signing key under DATA_DIR so sessions
+    survive container rebuilds without placing a secret in Git.
+    """
+
+    configured = str(
+        os.environ.get(
+            "BEACN_SECRET_KEY",
+            "",
+        )
+    ).strip()
+
+    if configured:
+        return configured
+
+    secret_path = (
+        Path(DATA_DIR)
+        / "beacn-secret-key"
+    )
+
+    secret_path.parent.mkdir(
+        parents=True,
+        exist_ok=True,
+    )
+
+    if secret_path.exists():
+        value = secret_path.read_text(
+            encoding="utf-8"
+        ).strip()
+
+        if value:
+            return value
+
+    value = secrets.token_urlsafe(48)
+
+    secret_path.write_text(
+        value + "\n",
+        encoding="utf-8",
+    )
+
+    try:
+        secret_path.chmod(0o600)
+    except OSError:
+        pass
+
+    return value
+
+
 app = Flask(__name__)
+
+app.secret_key = _load_or_create_secret_key()
+
+app.config.update(
+    SESSION_COOKIE_HTTPONLY=True,
+    SESSION_COOKIE_SAMESITE="Lax",
+    SESSION_COOKIE_SECURE=(
+        str(
+            os.environ.get(
+                "BEACN_SESSION_COOKIE_SECURE",
+                "false",
+            )
+        ).strip().lower()
+        in {
+            "1",
+            "true",
+            "yes",
+            "on",
+        }
+    ),
+    SESSION_REFRESH_EACH_REQUEST=True,
+)
+
+app.permanent_session_lifetime = timedelta(
+    hours=8
+)
+
+def _auth_user_count():
+    with db() as conn:
+        row = conn.execute("""
+            SELECT COUNT(*) AS count
+            FROM auth_users
+            WHERE is_enabled = 1
+        """).fetchone()
+
+    return int(row["count"] or 0)
+
+
+def _get_setting(
+    key,
+    default=None,
+):
+    with db() as conn:
+        row = conn.execute("""
+            SELECT value
+            FROM app_settings
+            WHERE key = ?
+        """, (key,)).fetchone()
+
+    if not row:
+        return default
+
+    return row["value"]
+
+
+def _set_setting(
+    key,
+    value,
+):
+    now = datetime.now(
+        timezone.utc
+    ).isoformat()
+
+    with db_write_lock:
+        with db() as conn:
+            conn.execute("""
+                INSERT INTO app_settings (
+                    key,
+                    value,
+                    updated_at
+                )
+                VALUES (?, ?, ?)
+                ON CONFLICT(key)
+                DO UPDATE SET
+                    value = excluded.value,
+                    updated_at = excluded.updated_at
+            """, (
+                key,
+                str(value),
+                now,
+            ))
+
+            conn.commit()
+
+
+def _smtp_settings():
+    return {
+        "host": str(
+            _get_setting(
+                "smtp.host",
+                "",
+            )
+            or ""
+        ).strip(),
+
+        "port": int(
+            _get_setting(
+                "smtp.port",
+                "587",
+            )
+            or 587
+        ),
+
+        "security": str(
+            _get_setting(
+                "smtp.security",
+                "starttls",
+            )
+            or "starttls"
+        ).strip().lower(),
+
+        "username": str(
+            _get_setting(
+                "smtp.username",
+                "",
+            )
+            or ""
+        ).strip(),
+
+        "password": str(
+            _get_setting(
+                "smtp.password",
+                "",
+            )
+            or ""
+        ),
+
+        "from_address": str(
+            _get_setting(
+                "smtp.from_address",
+                "",
+            )
+            or ""
+        ).strip(),
+
+        "from_name": str(
+            _get_setting(
+                "smtp.from_name",
+                "BEACN",
+            )
+            or "BEACN"
+        ).strip(),
+
+        "base_url": str(
+            _get_setting(
+                "smtp.base_url",
+                "",
+            )
+            or ""
+        ).strip().rstrip("/"),
+    }
+
+
+def _smtp_configured():
+    settings = _smtp_settings()
+
+    return bool(
+        settings["host"]
+        and settings["from_address"]
+        and settings["base_url"]
+    )
+
+
+def _send_email(
+    recipient,
+    subject,
+    body,
+):
+    settings = _smtp_settings()
+
+    if not _smtp_configured():
+        raise RuntimeError(
+            "SMTP is not configured."
+        )
+
+    message = EmailMessage()
+
+    message["Subject"] = subject
+    message["From"] = (
+        f'{settings["from_name"]} '
+        f'<{settings["from_address"]}>'
+    )
+    message["To"] = recipient
+
+    message.set_content(body)
+
+    context = ssl.create_default_context()
+
+    if settings["security"] == "ssl":
+        smtp_class = smtplib.SMTP_SSL
+
+        with smtp_class(
+            settings["host"],
+            settings["port"],
+            timeout=15,
+            context=context,
+        ) as smtp:
+            if settings["username"]:
+                smtp.login(
+                    settings["username"],
+                    settings["password"],
+                )
+
+            smtp.send_message(message)
+
+    else:
+        with smtplib.SMTP(
+            settings["host"],
+            settings["port"],
+            timeout=15,
+        ) as smtp:
+
+            if settings["security"] == "starttls":
+                smtp.starttls(
+                    context=context
+                )
+
+            if settings["username"]:
+                smtp.login(
+                    settings["username"],
+                    settings["password"],
+                )
+
+            smtp.send_message(message)
+
+
+def _hash_reset_token(token):
+    return hashlib.sha256(
+        token.encode("utf-8")
+    ).hexdigest()
+
+
+def _create_password_reset(
+    user_id,
+):
+    token = secrets.token_urlsafe(48)
+
+    token_hash = _hash_reset_token(
+        token
+    )
+
+    now_dt = datetime.now(
+        timezone.utc
+    )
+
+    expires_dt = (
+        now_dt
+        + timedelta(minutes=30)
+    )
+
+    with db_write_lock:
+        with db() as conn:
+
+            conn.execute("""
+                UPDATE auth_password_resets
+                SET used_at = ?
+                WHERE
+                    user_id = ?
+                    AND used_at IS NULL
+            """, (
+                now_dt.isoformat(),
+                user_id,
+            ))
+
+            conn.execute("""
+                INSERT INTO auth_password_resets (
+                    user_id,
+                    token_hash,
+                    created_at,
+                    expires_at,
+                    remote_addr
+                )
+                VALUES (?, ?, ?, ?, ?)
+            """, (
+                user_id,
+                token_hash,
+                now_dt.isoformat(),
+                expires_dt.isoformat(),
+                _client_address(),
+            ))
+
+            conn.commit()
+
+    return token
+
+
+def _session_timeout_hours():
+    try:
+        value = int(
+            _get_setting(
+                "security.session_timeout_hours",
+                "8",
+            )
+        )
+    except (TypeError, ValueError):
+        value = 8
+
+    return min(
+        168,
+        max(1, value),
+    )
+
+
+def _current_auth_user():
+    user_id = session.get(
+        "auth_user_id"
+    )
+
+    if not user_id:
+        return None
+
+    with db() as conn:
+        row = conn.execute("""
+            SELECT
+                id,
+                username,
+                email,
+                is_admin,
+                is_enabled,
+                session_version,
+                created_at,
+                updated_at,
+                last_login_at
+            FROM auth_users
+            WHERE id = ?
+        """, (user_id,)).fetchone()
+
+    if not row:
+        return None
+
+    user = dict(row)
+
+    if not user.get("is_enabled"):
+        return None
+
+    session_version = int(
+        session.get(
+            "auth_session_version",
+            0,
+        )
+    )
+
+    if session_version != int(
+        user.get(
+            "session_version",
+            1,
+        )
+    ):
+        session.clear()
+        return None
+
+    return user
+
+
+def _csrf_token():
+    token = session.get(
+        "auth_csrf_token"
+    )
+
+    if not token:
+        token = secrets.token_urlsafe(
+            32
+        )
+
+        session[
+            "auth_csrf_token"
+        ] = token
+
+    return token
+
+
+def _valid_csrf():
+    submitted = str(
+        request.form.get(
+            "_csrf",
+            "",
+        )
+    )
+
+    expected = str(
+        session.get(
+            "auth_csrf_token",
+            "",
+        )
+    )
+
+    return bool(
+        submitted
+        and expected
+        and secrets.compare_digest(
+            submitted,
+            expected,
+        )
+    )
+
+
+def _client_address():
+    return str(
+        request.remote_addr
+        or "unknown"
+    )
+
+
+def _login_rate_limited():
+    cutoff = (
+        datetime.now(timezone.utc)
+        - timedelta(minutes=15)
+    ).isoformat()
+
+    with db() as conn:
+        row = conn.execute("""
+            SELECT COUNT(*) AS count
+            FROM auth_login_events
+            WHERE
+                remote_addr = ?
+                AND success = 0
+                AND created_at >= ?
+        """, (
+            _client_address(),
+            cutoff,
+        )).fetchone()
+
+    return int(
+        row["count"] or 0
+    ) >= 5
+
+
+def _record_login_event(
+    username,
+    success,
+):
+    with db_write_lock:
+        with db() as conn:
+            conn.execute("""
+                INSERT INTO auth_login_events (
+                    username,
+                    remote_addr,
+                    success,
+                    created_at
+                )
+                VALUES (?, ?, ?, ?)
+            """, (
+                username,
+                _client_address(),
+                int(bool(success)),
+                datetime.now(
+                    timezone.utc
+                ).isoformat(),
+            ))
+
+            conn.commit()
+
+
+@app.context_processor
+def auth_template_context():
+    return {
+        "auth_user":
+            _current_auth_user(),
+
+        "auth_csrf_token":
+            _csrf_token(),
+    }
+
+
+@app.before_request
+def require_authentication():
+    path = request.path
+
+    if (
+        path.startswith("/static/")
+        or path in {
+            "/login",
+            "/logout",
+            "/setup",
+            "/forgot-password",
+            "/reset-password",
+        }
+    ):
+        return None
+
+    has_users = (
+        _auth_user_count() > 0
+    )
+
+    if not has_users:
+        if path.startswith("/api/"):
+            return jsonify({
+                "ok": False,
+                "error": (
+                    "BEACN administrator "
+                    "setup is required."
+                ),
+                "setup_required": True,
+            }), 401
+
+        return redirect(
+            url_for("auth_setup")
+        )
+
+    user = _current_auth_user()
+
+    if user:
+        app.permanent_session_lifetime = timedelta(
+            hours=_session_timeout_hours()
+        )
+
+        session.permanent = True
+        return None
+
+    if path.startswith("/api/"):
+        return jsonify({
+            "ok": False,
+            "error": (
+                "Authentication required."
+            ),
+        }), 401
+
+    return redirect(
+        url_for(
+            "auth_login",
+            next=request.full_path,
+        )
+    )
+
+
+@app.route(
+    "/setup",
+    methods=["GET", "POST"],
+)
+def auth_setup():
+    if _auth_user_count() > 0:
+        return redirect(
+            url_for("auth_login")
+        )
+
+    error = None
+
+    if request.method == "POST":
+        if not _valid_csrf():
+            error = (
+                "Security token expired. "
+                "Please try again."
+            )
+        else:
+            username = str(
+                request.form.get(
+                    "username",
+                    "",
+                )
+            ).strip()
+
+            password = str(
+                request.form.get(
+                    "password",
+                    "",
+                )
+            )
+
+            confirm = str(
+                request.form.get(
+                    "confirm_password",
+                    "",
+                )
+            )
+
+            if (
+                len(username) < 3
+                or len(username) > 64
+            ):
+                error = (
+                    "Username must be between "
+                    "3 and 64 characters."
+                )
+
+            elif len(password) < 12:
+                error = (
+                    "Password must contain at "
+                    "least 12 characters."
+                )
+
+            elif password != confirm:
+                error = (
+                    "Passwords do not match."
+                )
+
+            else:
+                now = datetime.now(
+                    timezone.utc
+                ).isoformat()
+
+                password_hash = (
+                    generate_password_hash(
+                        password,
+                        method="scrypt",
+                    )
+                )
+
+                with db_write_lock:
+                    with db() as conn:
+                        cursor = conn.execute("""
+                            INSERT INTO auth_users (
+                                username,
+                                password_hash,
+                                is_admin,
+                                is_enabled,
+                                created_at,
+                                updated_at
+                            )
+                            VALUES (?, ?, 1, 1, ?, ?)
+                        """, (
+                            username,
+                            password_hash,
+                            now,
+                            now,
+                        ))
+
+                        user_id = (
+                            cursor.lastrowid
+                        )
+
+                        conn.commit()
+
+                session.clear()
+
+                session[
+                    "auth_user_id"
+                ] = user_id
+
+                session[
+                    "auth_session_version"
+                ] = 1
+
+                session.permanent = True
+
+                _csrf_token()
+
+                return redirect(
+                    url_for("index")
+                )
+
+    return render_template(
+        "setup.html",
+        error=error,
+    )
+
+
+@app.route(
+    "/forgot-password",
+    methods=["GET", "POST"],
+)
+def auth_forgot_password():
+    message = None
+
+    if request.method == "POST":
+        email = str(
+            request.form.get(
+                "email",
+                "",
+            )
+        ).strip().lower()
+
+        if _valid_csrf():
+
+            with db() as conn:
+                row = conn.execute("""
+                    SELECT
+                        id,
+                        username,
+                        email
+                    FROM auth_users
+                    WHERE
+                        lower(email) = ?
+                        AND is_enabled = 1
+                """, (
+                    email,
+                )).fetchone()
+
+            if (
+                row
+                and row["email"]
+                and _smtp_configured()
+            ):
+                try:
+                    token = (
+                        _create_password_reset(
+                            row["id"]
+                        )
+                    )
+
+                    settings = (
+                        _smtp_settings()
+                    )
+
+                    reset_url = (
+                        f'{settings["base_url"]}'
+                        f'/reset-password'
+                        f'?token={token}'
+                    )
+
+                    body = (
+                        "A password reset was requested "
+                        "for your BEACN account.\n\n"
+                        f"Username: {row['username']}\n\n"
+                        "Reset your password using this link:\n"
+                        f"{reset_url}\n\n"
+                        "This link expires in 30 minutes "
+                        "and can only be used once.\n\n"
+                        "If you did not request this reset, "
+                        "you can ignore this email."
+                    )
+
+                    _send_email(
+                        row["email"],
+                        "BEACN password reset",
+                        body,
+                    )
+
+                except Exception:
+                    app.logger.exception(
+                        "Password reset email failed."
+                    )
+
+        # Deliberately identical response regardless
+        # of account existence or SMTP state.
+        message = (
+            "If that email address is associated "
+            "with an enabled BEACN account, "
+            "a reset message will be sent."
+        )
+
+    return render_template(
+        "forgot-password.html",
+        message=message,
+    )
+
+
+@app.route(
+    "/reset-password",
+    methods=["GET", "POST"],
+)
+def auth_reset_password():
+    token = str(
+        request.values.get(
+            "token",
+            "",
+        )
+    ).strip()
+
+    valid_reset = None
+
+    if token:
+        token_hash = (
+            _hash_reset_token(token)
+        )
+
+        now = datetime.now(
+            timezone.utc
+        ).isoformat()
+
+        with db() as conn:
+            valid_reset = conn.execute("""
+                SELECT
+                    r.id,
+                    r.user_id,
+                    r.expires_at,
+                    r.used_at,
+                    u.username
+                FROM auth_password_resets r
+                JOIN auth_users u
+                    ON u.id = r.user_id
+                WHERE
+                    r.token_hash = ?
+                    AND r.used_at IS NULL
+                    AND r.expires_at > ?
+                    AND u.is_enabled = 1
+            """, (
+                token_hash,
+                now,
+            )).fetchone()
+
+    error = None
+
+    if request.method == "POST":
+        if not valid_reset:
+            error = (
+                "This password reset link "
+                "is invalid or has expired."
+            )
+
+        elif not _valid_csrf():
+            error = (
+                "Security token expired. "
+                "Please try again."
+            )
+
+        else:
+            password = str(
+                request.form.get(
+                    "password",
+                    "",
+                )
+            )
+
+            confirm = str(
+                request.form.get(
+                    "confirm_password",
+                    "",
+                )
+            )
+
+            if len(password) < 12:
+                error = (
+                    "Password must contain "
+                    "at least 12 characters."
+                )
+
+            elif password != confirm:
+                error = (
+                    "Passwords do not match."
+                )
+
+            else:
+                password_hash = (
+                    generate_password_hash(
+                        password,
+                        method="scrypt",
+                    )
+                )
+
+                now = datetime.now(
+                    timezone.utc
+                ).isoformat()
+
+                with db_write_lock:
+                    with db() as conn:
+
+                        conn.execute("""
+                            UPDATE auth_users
+                            SET
+                                password_hash = ?,
+                                session_version =
+                                    session_version + 1,
+                                updated_at = ?
+                            WHERE id = ?
+                        """, (
+                            password_hash,
+                            now,
+                            valid_reset[
+                                "user_id"
+                            ],
+                        ))
+
+                        conn.execute("""
+                            UPDATE auth_password_resets
+                            SET used_at = ?
+                            WHERE id = ?
+                        """, (
+                            now,
+                            valid_reset["id"],
+                        ))
+
+                        conn.commit()
+
+                session.clear()
+
+                return redirect(
+                    url_for(
+                        "auth_login",
+                        reset="success",
+                    )
+                )
+
+    return render_template(
+        "reset-password.html",
+        token=token,
+        valid_reset=bool(valid_reset),
+        error=error,
+    )
+
+
+@app.route(
+    "/login",
+    methods=["GET", "POST"],
+)
+def auth_login():
+    if _auth_user_count() == 0:
+        return redirect(
+            url_for("auth_setup")
+        )
+
+    if _current_auth_user():
+        return redirect(
+            url_for("index")
+        )
+
+    error = None
+
+    if request.method == "POST":
+        if not _valid_csrf():
+            error = (
+                "Security token expired. "
+                "Please try again."
+            )
+
+        elif _login_rate_limited():
+            error = (
+                "Too many failed attempts. "
+                "Please wait 15 minutes."
+            )
+
+        else:
+            username = str(
+                request.form.get(
+                    "username",
+                    "",
+                )
+            ).strip()
+
+            password = str(
+                request.form.get(
+                    "password",
+                    "",
+                )
+            )
+
+            with db() as conn:
+                row = conn.execute("""
+                    SELECT *
+                    FROM auth_users
+                    WHERE
+                        username = ?
+                        AND is_enabled = 1
+                """, (
+                    username,
+                )).fetchone()
+
+            valid = bool(
+                row
+                and check_password_hash(
+                    row["password_hash"],
+                    password,
+                )
+            )
+
+            _record_login_event(
+                username,
+                valid,
+            )
+
+            if valid:
+                session.clear()
+
+                session[
+                    "auth_user_id"
+                ] = row["id"]
+
+                session[
+                    "auth_session_version"
+                ] = int(
+                    row["session_version"]
+                    or 1
+                )
+
+                session.permanent = True
+
+                _csrf_token()
+
+                now = datetime.now(
+                    timezone.utc
+                ).isoformat()
+
+                with db_write_lock:
+                    with db() as conn:
+                        conn.execute("""
+                            UPDATE auth_users
+                            SET
+                                last_login_at = ?,
+                                updated_at = ?
+                            WHERE id = ?
+                        """, (
+                            now,
+                            now,
+                            row["id"],
+                        ))
+
+                        conn.commit()
+
+                return redirect(
+                    url_for("index")
+                )
+
+            error = (
+                "Invalid username or password."
+            )
+
+    return render_template(
+        "login.html",
+        error=error,
+    )
+
+
+@app.post("/logout")
+def auth_logout():
+    if not _valid_csrf():
+        return (
+            "Invalid security token.",
+            400,
+        )
+
+    session.clear()
+
+    return redirect(
+        url_for("auth_login")
+    )
+
 
 def init_db():
     with db_write_lock:
         with db() as conn:
             initialise_schema(conn)
+            initialise_auth_schema(conn)
+            initialise_security_settings_schema(conn)
+            initialise_password_recovery_schema(conn)
 
 
 @app.get("/")
@@ -107,6 +1196,459 @@ def index():
         app_version=APP_VERSION,
         app_stage=APP_STAGE,
     )
+
+@app.route(
+    "/settings",
+    methods=["GET", "POST"],
+)
+def settings_page():
+    user = _current_auth_user()
+
+    message = None
+    error = None
+
+    if request.method == "POST":
+        if not _valid_csrf():
+            error = (
+                "Security token expired. "
+                "Please try again."
+            )
+
+        else:
+            action = str(
+                request.form.get(
+                    "action",
+                    "",
+                )
+            ).strip()
+
+            if action == "change_password":
+                current_password = str(
+                    request.form.get(
+                        "current_password",
+                        "",
+                    )
+                )
+
+                new_password = str(
+                    request.form.get(
+                        "new_password",
+                        "",
+                    )
+                )
+
+                confirm_password = str(
+                    request.form.get(
+                        "confirm_password",
+                        "",
+                    )
+                )
+
+                with db() as conn:
+                    row = conn.execute("""
+                        SELECT *
+                        FROM auth_users
+                        WHERE id = ?
+                    """, (
+                        user["id"],
+                    )).fetchone()
+
+                if not row or not check_password_hash(
+                    row["password_hash"],
+                    current_password,
+                ):
+                    error = "Current password is incorrect."
+
+                elif len(new_password) < 12:
+                    error = (
+                        "New password must contain "
+                        "at least 12 characters."
+                    )
+
+                elif new_password != confirm_password:
+                    error = "New passwords do not match."
+
+                else:
+                    now = datetime.now(
+                        timezone.utc
+                    ).isoformat()
+
+                    password_hash = (
+                        generate_password_hash(
+                            new_password,
+                            method="scrypt",
+                        )
+                    )
+
+                    with db_write_lock:
+                        with db() as conn:
+                            conn.execute("""
+                                UPDATE auth_users
+                                SET
+                                    password_hash = ?,
+                                    updated_at = ?,
+                                    session_version =
+                                        session_version + 1
+                                WHERE id = ?
+                            """, (
+                                password_hash,
+                                now,
+                                user["id"],
+                            ))
+
+                            conn.commit()
+
+                    with db() as conn:
+                        row = conn.execute("""
+                            SELECT session_version
+                            FROM auth_users
+                            WHERE id = ?
+                        """, (
+                            user["id"],
+                        )).fetchone()
+
+                    session[
+                        "auth_session_version"
+                    ] = int(
+                        row["session_version"]
+                    )
+
+                    message = "Password changed successfully."
+
+            elif action == "smtp_settings":
+                smtp_host = str(
+                    request.form.get(
+                        "smtp_host",
+                        "",
+                    )
+                ).strip()
+
+                smtp_port = str(
+                    request.form.get(
+                        "smtp_port",
+                        "587",
+                    )
+                ).strip()
+
+                smtp_security = str(
+                    request.form.get(
+                        "smtp_security",
+                        "starttls",
+                    )
+                ).strip().lower()
+
+                smtp_username = str(
+                    request.form.get(
+                        "smtp_username",
+                        "",
+                    )
+                ).strip()
+
+                smtp_password = str(
+                    request.form.get(
+                        "smtp_password",
+                        "",
+                    )
+                )
+
+                smtp_from_address = str(
+                    request.form.get(
+                        "smtp_from_address",
+                        "",
+                    )
+                ).strip()
+
+                smtp_from_name = str(
+                    request.form.get(
+                        "smtp_from_name",
+                        "BEACN",
+                    )
+                ).strip()
+
+                smtp_base_url = str(
+                    request.form.get(
+                        "smtp_base_url",
+                        "",
+                    )
+                ).strip().rstrip("/")
+
+                try:
+                    smtp_port_value = int(
+                        smtp_port
+                    )
+                except ValueError:
+                    smtp_port_value = 0
+
+                if (
+                    not smtp_host
+                    or smtp_port_value < 1
+                    or smtp_port_value > 65535
+                ):
+                    error = (
+                        "Enter a valid SMTP "
+                        "host and port."
+                    )
+
+                elif smtp_security not in {
+                    "none",
+                    "starttls",
+                    "ssl",
+                }:
+                    error = (
+                        "Unsupported SMTP "
+                        "security mode."
+                    )
+
+                elif (
+                    not smtp_from_address
+                    or "@" not in smtp_from_address
+                ):
+                    error = (
+                        "Enter a valid sender "
+                        "email address."
+                    )
+
+                elif not (
+                    smtp_base_url.startswith(
+                        "http://"
+                    )
+                    or smtp_base_url.startswith(
+                        "https://"
+                    )
+                ):
+                    error = (
+                        "BEACN public URL must "
+                        "begin with http:// or https://."
+                    )
+
+                else:
+                    settings = {
+                        "smtp.host":
+                            smtp_host,
+
+                        "smtp.port":
+                            smtp_port_value,
+
+                        "smtp.security":
+                            smtp_security,
+
+                        "smtp.username":
+                            smtp_username,
+
+                        "smtp.from_address":
+                            smtp_from_address,
+
+                        "smtp.from_name":
+                            smtp_from_name or "BEACN",
+
+                        "smtp.base_url":
+                            smtp_base_url,
+                    }
+
+                    for key, value in settings.items():
+                        _set_setting(
+                            key,
+                            value,
+                        )
+
+                    if smtp_password:
+                        _set_setting(
+                            "smtp.password",
+                            smtp_password,
+                        )
+
+                    message = (
+                        "SMTP settings saved."
+                    )
+
+            elif action == "smtp_test":
+                destination = str(
+                    request.form.get(
+                        "test_email",
+                        "",
+                    )
+                ).strip()
+
+                if (
+                    not destination
+                    or "@" not in destination
+                ):
+                    error = (
+                        "Enter a valid test "
+                        "email address."
+                    )
+
+                else:
+                    try:
+                        _send_email(
+                            destination,
+                            "BEACN test email",
+                            (
+                                "BEACN SMTP configuration "
+                                "is working correctly."
+                            ),
+                        )
+
+                        message = (
+                            "Test email sent."
+                        )
+
+                    except Exception as exc:
+                        app.logger.exception(
+                            "SMTP test failed."
+                        )
+
+                        error = (
+                            "SMTP test failed: "
+                            f"{exc}"
+                        )
+
+            elif action == "recovery_email":
+                email = str(
+                    request.form.get(
+                        "recovery_email",
+                        "",
+                    )
+                ).strip().lower()
+
+                if (
+                    not email
+                    or "@" not in email
+                    or len(email) > 254
+                ):
+                    error = (
+                        "Enter a valid recovery "
+                        "email address."
+                    )
+
+                else:
+                    with db() as conn:
+                        existing = conn.execute("""
+                            SELECT id
+                            FROM auth_users
+                            WHERE
+                                lower(email) = ?
+                                AND id != ?
+                        """, (
+                            email,
+                            user["id"],
+                        )).fetchone()
+
+                    if existing:
+                        error = (
+                            "That email address "
+                            "is already in use."
+                        )
+
+                    else:
+                        now = datetime.now(
+                            timezone.utc
+                        ).isoformat()
+
+                        with db_write_lock:
+                            with db() as conn:
+                                conn.execute("""
+                                    UPDATE auth_users
+                                    SET
+                                        email = ?,
+                                        updated_at = ?
+                                    WHERE id = ?
+                                """, (
+                                    email,
+                                    now,
+                                    user["id"],
+                                ))
+
+                                conn.commit()
+
+                        message = (
+                            "Recovery email updated."
+                        )
+
+            elif action == "session_timeout":
+                raw_hours = str(
+                    request.form.get(
+                        "session_timeout_hours",
+                        "",
+                    )
+                ).strip()
+
+                try:
+                    hours = int(raw_hours)
+                except ValueError:
+                    hours = 0
+
+                if hours < 1 or hours > 168:
+                    error = (
+                        "Session timeout must be "
+                        "between 1 and 168 hours."
+                    )
+
+                else:
+                    _set_setting(
+                        "security.session_timeout_hours",
+                        hours,
+                    )
+
+                    message = (
+                        "Session timeout updated."
+                    )
+
+            elif action == "logout_all":
+                with db_write_lock:
+                    with db() as conn:
+                        conn.execute("""
+                            UPDATE auth_users
+                            SET
+                                session_version =
+                                    session_version + 1,
+                                updated_at = ?
+                            WHERE id = ?
+                        """, (
+                            datetime.now(
+                                timezone.utc
+                            ).isoformat(),
+                            user["id"],
+                        ))
+
+                        conn.commit()
+
+                session.clear()
+
+                return redirect(
+                    url_for("auth_login")
+                )
+
+    with db() as conn:
+        login_rows = conn.execute("""
+            SELECT
+                username,
+                remote_addr,
+                success,
+                created_at
+            FROM auth_login_events
+            ORDER BY id DESC
+            LIMIT 25
+        """).fetchall()
+
+    login_events = [
+        dict(row)
+        for row in login_rows
+    ]
+
+    return render_template(
+        "settings.html",
+        user=_current_auth_user(),
+        message=message,
+        error=error,
+        session_timeout_hours=(
+            _session_timeout_hours()
+        ),
+        login_events=login_events,
+        smtp_settings=_smtp_settings(),
+        smtp_configured=_smtp_configured(),
+    )
+
 
 @app.get("/api/health")
 def api_health():

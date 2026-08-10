@@ -1,0 +1,97 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+
+  <meta
+    name="viewport"
+    content="width=device-width, initial-scale=1"
+  >
+
+  <title>Sign in · BEACN</title>
+
+  <link
+    rel="stylesheet"
+    href="{{ url_for('static', filename='css/auth.css') }}?v={{ app_version }}"
+  >
+</head>
+
+<body>
+
+  <main class="auth-shell">
+
+    <section class="auth-card">
+
+      <div class="auth-brand">
+        <div class="auth-logo">B</div>
+
+        <div>
+          <strong>BEACN</strong>
+          <span>Network Intelligence</span>
+        </div>
+      </div>
+
+      <div class="auth-heading">
+        <h1>Sign in</h1>
+
+        <p>
+          Authenticate to access network intelligence,
+          topology and device information.
+        </p>
+      </div>
+
+      {% if error %}
+        <div class="auth-error">
+          {{ error }}
+        </div>
+      {% endif %}
+
+      <form method="post">
+
+        <input
+          type="hidden"
+          name="_csrf"
+          value="{{ auth_csrf_token }}"
+        >
+
+        <label>
+          Username
+
+          <input
+            type="text"
+            name="username"
+            autocomplete="username"
+            required
+            autofocus
+          >
+        </label>
+
+        <label>
+          Password
+
+          <input
+            type="password"
+            name="password"
+            autocomplete="current-password"
+            required
+          >
+        </label>
+
+        <button type="submit">
+          Sign in
+        </button>
+
+      </form>
+
+      <p class="auth-footer-link">
+        <a href="{{ url_for('auth_forgot_password') }}">
+          Forgot password?
+        </a>
+      </p>
+
+    </section>
+
+  </main>
+
+</body>
+</html>

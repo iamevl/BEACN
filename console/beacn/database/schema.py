@@ -193,3 +193,117 @@ def initialise_schema(conn: sqlite3.Connection) -> None:
     conn.execute("CREATE UNIQUE INDEX IF NOT EXISTS idx_devices_id ON devices(id)")
     conn.execute("CREATE INDEX IF NOT EXISTS idx_devices_mac ON devices(mac)")
     conn.execute("CREATE INDEX IF NOT EXISTS idx_devices_hostname ON devices(hostname)")
+
+# BEACN authentication schema
+
+def initialise_auth_schema(conn):
+    """
+    Authentication and security-audit tables.
+
+    Passwords are never stored directly. password_hash contains
+    only a Werkzeug password hash.
+    """
+
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS auth_users (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            username TEXT NOT NULL UNIQUE COLLATE NOCASE,
+            password_hash TEXT NOT NULL,
+            is_admin INTEGER NOT NULL DEFAULT 1,
+            is_enabled INTEGER NOT NULL DEFAULT 1,
+            created_at TEXT NOT NULL,
+            updated_at TEXT NOT NULL,
+            last_login_at TEXT
+        )
+    """)
+
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS auth_login_events (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            username TEXT,
+            remote_addr TEXT,
+            success INTEGER NOT NULL DEFAULT 0,
+            created_at TEXT NOT NULL
+        )
+    """)
+
+    conn.execute("""
+        CREATE INDEX IF NOT EXISTS
+        idx_auth_login_events_remote_created
+        ON auth_login_events (
+            remote_addr,
+            created_at
+        )
+    """)
+
+# BEACN security settings schema
+
+def initialise_security_settings_schema(conn):
+    columns = {
+        row["name"]
+        for row in conn.execute(
+            "PRAGMA table_info(auth_users)"
+        ).fetchall()
+    }
+
+    if "session_version" not in columns:
+        conn.execute("""
+            ALTER TABLE auth_users
+            ADD COLUMN session_version
+            INTEGER NOT NULL DEFAULT 1
+        """)
+
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS app_settings (
+            key TEXT PRIMARY KEY,
+            value TEXT,
+            updated_at TEXT NOT NULL
+        )
+    """)
+
+# BEACN password recovery schema
+
+def initialise_password_recovery_schema(conn):
+    columns = {
+        row["name"]
+        for row in conn.execute(
+            "PRAGMA table_info(auth_users)"
+        ).fetchall()
+    }
+
+    if "email" not in columns:
+        conn.execute("""
+            ALTER TABLE auth_users
+            ADD COLUMN email TEXT
+        """)
+
+    conn.execute("""
+        CREATE UNIQUE INDEX IF NOT EXISTS
+        idx_auth_users_email
+        ON auth_users(email)
+        WHERE email IS NOT NULL
+    """)
+
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS auth_password_resets (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id INTEGER NOT NULL,
+            token_hash TEXT NOT NULL UNIQUE,
+            created_at TEXT NOT NULL,
+            expires_at TEXT NOT NULL,
+            used_at TEXT,
+            remote_addr TEXT,
+            FOREIGN KEY(user_id)
+                REFERENCES auth_users(id)
+                ON DELETE CASCADE
+        )
+    """)
+
+    conn.execute("""
+        CREATE INDEX IF NOT EXISTS
+        idx_auth_password_resets_expiry
+        ON auth_password_resets(
+            expires_at,
+            used_at
+        )
+    """)
