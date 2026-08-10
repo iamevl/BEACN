@@ -512,7 +512,100 @@
 
       <pre id="output">Ready.</pre>
     </section>
-  </main>
+
+    <section
+      class="card relationship-intelligence-card"
+      id="relationshipIntelligenceCard"
+    >
+      <div class="relationship-intelligence-header">
+        <div>
+          <div class="eyebrow">
+            TOPOLOGY INTELLIGENCE
+          </div>
+
+          <h2>Relationship Intelligence</h2>
+
+          <p class="muted">
+            Evidence collected by the BEACN Relationship Manager.
+          </p>
+        </div>
+
+        <div
+          class="relationship-engine-state"
+          id="relationshipEngineState"
+        >
+          Loading…
+        </div>
+      </div>
+
+      <div
+        class="relationship-summary-grid"
+        id="relationshipSummary"
+      >
+        <div class="relationship-summary-card">
+          Loading relationship intelligence…
+        </div>
+      </div>
+
+      <div class="relationship-intelligence-grid">
+        <section class="relationship-panel">
+          <div class="relationship-panel-header">
+            <div>
+              <h3>Evidence providers</h3>
+              <p class="muted">
+                Sources currently contributing topology evidence.
+              </p>
+            </div>
+          </div>
+
+          <div
+            id="relationshipProviders"
+            class="relationship-provider-list"
+          ></div>
+        </section>
+
+        <section class="relationship-panel">
+          <div class="relationship-panel-header">
+            <div>
+              <h3>Resolution status</h3>
+              <p class="muted">
+                Devices still waiting for sufficient relationship evidence.
+              </p>
+            </div>
+          </div>
+
+          <div
+            id="relationshipResolution"
+            class="relationship-resolution"
+          ></div>
+        </section>
+      </div>
+
+      <section class="relationship-panel relationship-table-panel">
+        <div class="relationship-panel-header">
+          <div>
+            <h3>Resolved relationships</h3>
+            <p class="muted">
+              Current winning relationships and the evidence behind them.
+            </p>
+          </div>
+
+          <span
+            class="badge"
+            id="relationshipTableCount"
+          >
+            0
+          </span>
+        </div>
+
+        <div
+          id="relationshipTable"
+          class="relationship-table-wrap"
+        ></div>
+      </section>
+    </section>
+
+</main>
 
   <script src="{{ url_for('static', filename='js/core.js') }}?v={{ app_version }}"></script>
   <script src="{{ url_for('static', filename='js/device-profile.js') }}?v={{ app_version }}"></script>
@@ -527,5 +620,10 @@
   <script src="{{ url_for('static', filename='js/docker.js') }}?v={{ app_version }}"></script>
   <script src="{{ url_for('static', filename='js/health.js') }}?v={{ app_version }}"></script>
   <script src="{{ url_for('static', filename='js/network.js') }}?v={{ app_version }}"></script>
+
+  <script
+    src="{{ url_for('static', filename='js/relationship-intelligence.js') }}?v={{ app_version }}"
+  ></script>
+
 </body>
 </html>
