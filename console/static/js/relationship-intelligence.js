@@ -268,6 +268,278 @@ function renderRelationshipResolution(payload) {
 }
 
 
+function renderRelationshipInspector(item) {
+    const panel =
+        document.getElementById(
+            "relationshipInspector"
+        );
+
+    const body =
+        document.getElementById(
+            "relationshipInspectorBody"
+        );
+
+    if (!panel || !body || !item) {
+        return;
+    }
+
+    const evidence =
+        Array.isArray(item.evidence)
+            ? [...item.evidence]
+            : [];
+
+    evidence.sort(
+        (left, right) =>
+            Number(right.confidence || 0) -
+            Number(left.confidence || 0)
+    );
+
+    body.innerHTML = `
+        <div class="relationship-inspector-route">
+          <div class="relationship-inspector-node">
+            <small>Subject</small>
+
+            <strong>
+              ${riEsc(
+                  item.subject?.name ||
+                  item.subject_ref
+              )}
+            </strong>
+
+            <span class="muted">
+              ${riEsc(
+                  item.subject?.ip ||
+                  item.subject_ref
+              )}
+            </span>
+          </div>
+
+          <div
+            class="relationship-inspector-arrow"
+            aria-hidden="true"
+          >
+            ↓
+          </div>
+
+          <div class="relationship-inspector-node">
+            <small>Parent</small>
+
+            <strong>
+              ${riEsc(
+                  item.parent?.name ||
+                  item.parent_ref
+              )}
+            </strong>
+
+            <span class="muted">
+              ${riEsc(
+                  item.parent?.ip ||
+                  item.parent_ref
+              )}
+            </span>
+          </div>
+        </div>
+
+        <div class="relationship-inspector-grid">
+          <article>
+            <small>Placement</small>
+
+            <strong>
+              ${
+                  item.placement === "manual"
+                      ? "Manual override"
+                      : "Automatic"
+              }
+            </strong>
+          </article>
+
+          <article>
+            <small>Transport</small>
+
+            <strong>
+              ${riEsc(
+                  item.transport || "unknown"
+              )}
+            </strong>
+          </article>
+
+          <article>
+            <small>Confidence</small>
+
+            <strong>
+              ${riEsc(item.confidence)}%
+            </strong>
+          </article>
+
+          <article>
+            <small>Winning provider</small>
+
+            <strong>
+              ${riEsc(
+                  item.provider_label ||
+                  item.provider
+              )}
+            </strong>
+          </article>
+        </div>
+
+        <div class="relationship-inspector-reason">
+          <small>Winning reason</small>
+
+          <strong>
+            ${riEsc(
+                item.reason_label ||
+                item.reason
+            )}
+          </strong>
+        </div>
+
+        <div class="relationship-inspector-evidence">
+          <div class="relationship-panel-header">
+            <div>
+              <h4>Candidate evidence</h4>
+
+              <p class="muted">
+                Evidence considered by the Relationship Manager.
+              </p>
+            </div>
+
+            <span class="badge">
+              ${evidence.length}
+            </span>
+          </div>
+
+          ${
+              evidence.length
+                  ? `
+                      <div class="relationship-evidence-list">
+                        ${evidence.map((candidate, index) => `
+                            <div
+                              class="
+                                relationship-evidence-row
+                                ${
+                                    index === 0
+                                        ? "relationship-evidence-winner"
+                                        : ""
+                                }
+                              "
+                            >
+                              <div>
+                                <strong>
+                                  ${riEsc(
+                                      candidate.provider_label ||
+                                      candidate.provider
+                                  )}
+                                </strong>
+
+                                <small class="muted">
+                                  ${riEsc(
+                                      candidate.reason_label ||
+                                      candidate.reason
+                                  )}
+                                </small>
+                              </div>
+
+                              <div class="relationship-evidence-parent">
+                                <small>Parent</small>
+
+                                <strong>
+                                  ${riEsc(
+                                      candidate.parent?.name ||
+                                      candidate.parent_ref
+                                  )}
+                                </strong>
+                              </div>
+
+                              <div>
+                                <span
+                                  class="
+                                    relationship-confidence
+                                    ${relationshipConfidenceClass(
+                                        candidate.confidence
+                                    )}
+                                  "
+                                >
+                                  ${riEsc(
+                                      candidate.confidence
+                                  )}%
+                                </span>
+                              </div>
+
+                              ${
+                                  index === 0
+                                      ? `
+                                          <span class="badge">
+                                            Winner
+                                          </span>
+                                        `
+                                      : ""
+                              }
+                            </div>
+                        `).join("")}
+                      </div>
+                    `
+                  : `
+                      <div class="empty">
+                        No candidate evidence recorded.
+                      </div>
+                    `
+          }
+        </div>
+    `;
+
+    panel.hidden = false;
+
+    panel.scrollIntoView({
+        behavior: "smooth",
+        block: "start"
+    });
+}
+
+
+function bindRelationshipRows(relationships) {
+    document
+        .querySelectorAll(
+            "[data-relationship-index]"
+        )
+        .forEach(row => {
+            const open = () => {
+                const index =
+                    Number(
+                        row.dataset.relationshipIndex
+                    );
+
+                const item =
+                    relationships[index];
+
+                if (item) {
+                    renderRelationshipInspector(
+                        item
+                    );
+                }
+            };
+
+            row.addEventListener(
+                "click",
+                open
+            );
+
+            row.addEventListener(
+                "keydown",
+                event => {
+                    if (
+                        event.key === "Enter" ||
+                        event.key === " "
+                    ) {
+                        event.preventDefault();
+                        open();
+                    }
+                }
+            );
+        });
+}
+
+
 function renderRelationshipTable(payload) {
     const target =
         document.getElementById(
@@ -302,15 +574,16 @@ function renderRelationshipTable(payload) {
         return;
     }
 
-    const sorted = [...relationships]
-        .sort((left, right) =>
-            String(
-                left.subject?.name || ""
-            ).localeCompare(
+    const sorted =
+        [...relationships].sort(
+            (left, right) =>
                 String(
-                    right.subject?.name || ""
+                    left.subject?.name || ""
+                ).localeCompare(
+                    String(
+                        right.subject?.name || ""
+                    )
                 )
-            )
         );
 
     target.innerHTML = `
@@ -326,8 +599,13 @@ function renderRelationshipTable(payload) {
           </thead>
 
           <tbody>
-            ${sorted.map(item => `
-                <tr>
+            ${sorted.map((item, index) => `
+                <tr
+                  class="relationship-table-row"
+                  data-relationship-index="${index}"
+                  tabindex="0"
+                  title="Click to inspect relationship evidence"
+                >
                   <td>
                     <strong>
                       ${riEsc(
@@ -336,7 +614,9 @@ function renderRelationshipTable(payload) {
                       )}
                     </strong>
 
-                    <small class="muted relationship-table-subtext">
+                    <small
+                      class="muted relationship-table-subtext"
+                    >
                       ${riEsc(
                           item.subject?.ip ||
                           item.subject_ref
@@ -356,7 +636,8 @@ function renderRelationshipTable(payload) {
                   <td>
                     <span class="badge">
                       ${riEsc(
-                          item.transport || "unknown"
+                          item.transport ||
+                          "unknown"
                       )}
                     </span>
                   </td>
@@ -369,7 +650,9 @@ function renderRelationshipTable(payload) {
                       )}
                     </strong>
 
-                    <small class="muted relationship-table-subtext">
+                    <small
+                      class="muted relationship-table-subtext"
+                    >
                       ${riEsc(
                           item.reason_label ||
                           item.reason
@@ -386,7 +669,9 @@ function renderRelationshipTable(payload) {
                         )}
                       "
                     >
-                      ${riEsc(item.confidence)}%
+                      ${riEsc(
+                          item.confidence
+                      )}%
                     </span>
                   </td>
                 </tr>
@@ -394,8 +679,9 @@ function renderRelationshipTable(payload) {
           </tbody>
         </table>
     `;
-}
 
+    bindRelationshipRows(sorted);
+}
 
 async function refreshRelationshipIntelligence() {
     const engineState =
@@ -459,6 +745,24 @@ async function refreshRelationshipIntelligence() {
 document.addEventListener(
     "DOMContentLoaded",
     () => {
+        document
+            .getElementById(
+                "relationshipInspectorClose"
+            )
+            ?.addEventListener(
+                "click",
+                () => {
+                    const panel =
+                        document.getElementById(
+                            "relationshipInspector"
+                        );
+
+                    if (panel) {
+                        panel.hidden = true;
+                    }
+                }
+            );
+
         refreshRelationshipIntelligence();
 
         setInterval(
