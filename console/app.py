@@ -17,6 +17,9 @@ from flask import Flask, jsonify, render_template, request
 
 from beacn.database import initialise_schema
 from beacn.services.health import get_health_summary
+from beacn.relationships.manager import RelationshipManager
+from beacn.relationships.providers.generic import GenericProvider
+from beacn.relationships.providers.infrastructure import InfrastructureProvider
 from beacn.services.snmp import get_snmp_snapshot
 try:
     from docker.errors import DockerException
@@ -212,6 +215,262 @@ def devices():
         "subnet": NETWORK_SUBNET,
     })
 
+
+
+
+def _relationship_context():
+    """
+    Build the normalized inventory consumed by Relationship
+    Evidence Providers.
+
+    This intentionally contains no provider-specific logic.
+    """
+
+    with db() as conn:
+        device_rows = conn.execute("""
+            SELECT
+                id,
+                ip,
+                hostname,
+                display_name,
+                mac,
+                vendor,
+                is_online,
+                agent_available,
+                device_type,
+                device_type_source,
+                connection_method,
+                connection_parent_ip,
+                connection_parent_ref,
+                connection_source,
+                management_url,
+                notes
+            FROM devices
+            ORDER BY ip
+        """).fetchall()
+
+        infrastructure_rows = conn.execute("""
+            SELECT *
+            FROM infrastructure_objects
+            ORDER BY name COLLATE NOCASE
+        """).fetchall()
+
+    devices_payload = [
+        dict(row)
+        for row in device_rows
+    ]
+
+    infrastructure_payload = []
+
+    for row in infrastructure_rows:
+        item = dict(row)
+
+        raw_interfaces = item.pop(
+            "interfaces_json",
+            None,
+        )
+
+        try:
+            item["interfaces"] = (
+                json.loads(
+                    raw_interfaces
+                )
+                if raw_interfaces
+                else []
+            )
+        except json.JSONDecodeError:
+            item["interfaces"] = []
+
+        item["managed"] = (
+            None
+            if item["managed"] is None
+            else bool(
+                item["managed"]
+            )
+        )
+
+        item["object_kind"] = (
+            "infrastructure"
+        )
+
+        item["ref"] = (
+            f"infra:{item['id']}"
+        )
+
+        infrastructure_payload.append(
+            item
+        )
+
+    return {
+        "devices": devices_payload,
+        "infrastructure":
+            infrastructure_payload,
+    }
+
+
+@app.get("/api/relationships")
+def relationship_intelligence():
+    context = _relationship_context()
+
+    manager = RelationshipManager()
+
+    manager.register(
+        InfrastructureProvider()
+    )
+
+    manager.register(
+        GenericProvider()
+    )
+
+    relationships = manager.evaluate(
+        context
+    )
+
+    evidence = manager.collect_evidence(
+        context
+    )
+
+    relationships_payload = []
+
+    resolved_device_refs = set()
+
+    for relationship in relationships:
+        if relationship.subject_ref.startswith(
+            "device:"
+        ):
+            resolved_device_refs.add(
+                relationship.subject_ref
+            )
+
+        relationships_payload.append({
+            "subject_ref":
+                relationship.subject_ref,
+
+            "parent_ref":
+                relationship.parent_ref,
+
+            "transport":
+                relationship.transport,
+
+            "provider":
+                relationship.provider,
+
+            "confidence":
+                relationship.confidence,
+
+            "reason":
+                relationship.reason,
+
+            "evidence": [
+                {
+                    "provider":
+                        item.provider,
+
+                    "parent_ref":
+                        item.parent_ref,
+
+                    "transport":
+                        item.transport,
+
+                    "confidence":
+                        item.confidence,
+
+                    "reason":
+                        item.reason,
+                }
+                for item
+                in relationship.evidence
+            ],
+        })
+
+    device_refs = {
+        f"device:{device['ip']}"
+        for device in context["devices"]
+        if device.get("ip")
+    }
+
+    infrastructure_refs = {
+        item["ref"]
+        for item
+        in context["infrastructure"]
+        if item.get("ref")
+    }
+
+    unresolved_device_refs = sorted(
+        device_refs -
+        resolved_device_refs
+    )
+
+    provider_counts = {}
+
+    for item in evidence:
+        provider_counts[
+            item.provider
+        ] = (
+            provider_counts.get(
+                item.provider,
+                0,
+            )
+            + 1
+        )
+
+    providers = [
+        {
+            "name": provider.name,
+            "status": "healthy",
+            "evidence_count":
+                provider_counts.get(
+                    provider.name,
+                    0,
+                ),
+        }
+        for provider in manager.providers
+    ]
+
+    return jsonify({
+        "ok": True,
+
+        "summary": {
+            "relationships":
+                len(
+                    relationships_payload
+                ),
+
+            "device_relationships":
+                len(
+                    resolved_device_refs
+                ),
+
+            "unresolved_devices":
+                len(
+                    unresolved_device_refs
+                ),
+
+            "infrastructure_objects":
+                len(
+                    infrastructure_refs
+                ),
+
+            "providers":
+                len(
+                    manager.providers
+                ),
+
+            "evidence_items":
+                len(
+                    evidence
+                ),
+        },
+
+        "providers":
+            providers,
+
+        "relationships":
+            relationships_payload,
+
+        "unresolved_device_refs":
+            unresolved_device_refs,
+    })
 
 
 INFRASTRUCTURE_TYPES = {
