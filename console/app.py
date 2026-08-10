@@ -955,7 +955,7 @@ def auth_forgot_password():
                     reset_url = (
                         f'{settings["base_url"]}'
                         f'/reset-password'
-                        f'?token={token}'
+                        f'#token={token}'
                     )
 
                     body = (
@@ -1000,16 +1000,23 @@ def auth_forgot_password():
     methods=["GET", "POST"],
 )
 def auth_reset_password():
-    token = str(
-        request.values.get(
-            "token",
-            "",
-        )
-    ).strip()
+    token = ""
 
-    valid_reset = None
+    valid_reset = (
+        request.method == "GET"
+    )
 
-    if token:
+    if request.method == "POST":
+        token = str(
+            request.form.get(
+                "token",
+                "",
+            )
+        ).strip()
+
+        valid_reset = None
+
+    if request.method == "POST" and token:
         token_hash = (
             _hash_reset_token(token)
         )
