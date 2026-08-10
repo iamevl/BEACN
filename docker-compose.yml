@@ -22,6 +22,9 @@ services:
       TELEMETRY_MAX_POINTS: "1000"
       DOCKER_MONITORING_ENABLED: "true"
       DOCKER_TIMEOUT_SECONDS: "5"
+      # Production is served through HTTPS. Override to false only
+      # for intentional direct HTTP development access.
+      BEACN_SESSION_COOKIE_SECURE: "${BEACN_SESSION_COOKIE_SECURE:-true}"
       TZ: "Europe/London"
 
       # Optional SNMP enrichment.

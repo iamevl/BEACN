@@ -447,6 +447,80 @@ def _create_password_reset(
     return token
 
 
+def _claim_password_reset_request(email):
+    """Atomically reserve capacity for a password-reset request."""
+
+    now_dt = datetime.now(
+        timezone.utc
+    )
+
+    remote_cutoff = (
+        now_dt
+        - timedelta(minutes=15)
+    ).isoformat()
+
+    email_cutoff = (
+        now_dt
+        - timedelta(hours=1)
+    ).isoformat()
+
+    email_hash = hashlib.sha256(
+        email.encode("utf-8")
+    ).hexdigest()
+
+    with db_write_lock:
+        with db() as conn:
+            conn.execute(
+                "BEGIN IMMEDIATE"
+            )
+
+            remote_count = conn.execute("""
+                SELECT COUNT(*) AS count
+                FROM auth_password_reset_requests
+                WHERE
+                    remote_addr = ?
+                    AND created_at >= ?
+            """, (
+                _client_address(),
+                remote_cutoff,
+            )).fetchone()
+
+            email_count = conn.execute("""
+                SELECT COUNT(*) AS count
+                FROM auth_password_reset_requests
+                WHERE
+                    email_hash = ?
+                    AND created_at >= ?
+            """, (
+                email_hash,
+                email_cutoff,
+            )).fetchone()
+
+            if (
+                int(remote_count["count"] or 0) >= 3
+                or int(email_count["count"] or 0) >= 3
+            ):
+                conn.rollback()
+                return False
+
+            conn.execute("""
+                INSERT INTO auth_password_reset_requests (
+                    email_hash,
+                    remote_addr,
+                    created_at
+                )
+                VALUES (?, ?, ?)
+            """, (
+                email_hash,
+                _client_address(),
+                now_dt.isoformat(),
+            ))
+
+            conn.commit()
+
+    return True
+
+
 def _session_timeout_hours():
     try:
         value = int(
@@ -841,7 +915,12 @@ def auth_forgot_password():
             )
         ).strip().lower()
 
-        if _valid_csrf():
+        if (
+            _valid_csrf()
+            and _claim_password_reset_request(
+                email
+            )
+        ):
 
             with db() as conn:
                 row = conn.execute("""
@@ -1013,44 +1092,78 @@ def auth_reset_password():
                     timezone.utc
                 ).isoformat()
 
+                reset_consumed = False
+
                 with db_write_lock:
                     with db() as conn:
+                        conn.execute(
+                            "BEGIN IMMEDIATE"
+                        )
 
-                        conn.execute("""
-                            UPDATE auth_users
-                            SET
-                                password_hash = ?,
-                                session_version =
-                                    session_version + 1,
-                                updated_at = ?
-                            WHERE id = ?
-                        """, (
-                            password_hash,
-                            now,
-                            valid_reset[
-                                "user_id"
-                            ],
-                        ))
-
-                        conn.execute("""
+                        consumed = conn.execute("""
                             UPDATE auth_password_resets
                             SET used_at = ?
-                            WHERE id = ?
+                            WHERE
+                                id = ?
+                                AND token_hash = ?
+                                AND used_at IS NULL
+                                AND expires_at > ?
+                                AND EXISTS (
+                                    SELECT 1
+                                    FROM auth_users
+                                    WHERE
+                                        id = auth_password_resets.user_id
+                                        AND is_enabled = 1
+                                )
                         """, (
                             now,
                             valid_reset["id"],
+                            token_hash,
+                            now,
                         ))
 
-                        conn.commit()
+                        if consumed.rowcount == 1:
+                            updated = conn.execute("""
+                                UPDATE auth_users
+                                SET
+                                    password_hash = ?,
+                                    session_version =
+                                        session_version + 1,
+                                    updated_at = ?
+                                WHERE
+                                    id = ?
+                                    AND is_enabled = 1
+                            """, (
+                                password_hash,
+                                now,
+                                valid_reset[
+                                    "user_id"
+                                ],
+                            ))
 
-                session.clear()
+                            if updated.rowcount == 1:
+                                conn.commit()
+                                reset_consumed = True
+                            else:
+                                conn.rollback()
+                        else:
+                            conn.rollback()
 
-                return redirect(
-                    url_for(
-                        "auth_login",
-                        reset="success",
+                if reset_consumed:
+                    session.clear()
+
+                    return redirect(
+                        url_for(
+                            "auth_login",
+                            reset="success",
+                        )
                     )
+
+                error = (
+                    "This password reset link "
+                    "is invalid or has expired."
                 )
+                valid_reset = None
 
     return render_template(
         "reset-password.html",
@@ -1280,7 +1393,9 @@ def settings_page():
                     row["password_hash"],
                     current_password,
                 ):
-                    error = "Current password is incorrect."
+                    security_error = (
+                        "Current password is incorrect."
+                    )
 
                 elif len(new_password) < 12:
                     security_error = (
@@ -1289,7 +1404,9 @@ def settings_page():
                     )
 
                 elif new_password != confirm_password:
-                    error = "New passwords do not match."
+                    security_error = (
+                        "New passwords do not match."
+                    )
 
                 else:
                     now = datetime.now(
@@ -1336,7 +1453,9 @@ def settings_page():
                         row["session_version"]
                     )
 
-                    message = "Password changed successfully."
+                    security_message = (
+                        "Password changed successfully."
+                    )
 
             elif action == "smtp_settings":
                 smtp_host = str(

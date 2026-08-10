@@ -307,3 +307,30 @@ def initialise_password_recovery_schema(conn):
             used_at
         )
     """)
+
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS auth_password_reset_requests (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            email_hash TEXT NOT NULL,
+            remote_addr TEXT NOT NULL,
+            created_at TEXT NOT NULL
+        )
+    """)
+
+    conn.execute("""
+        CREATE INDEX IF NOT EXISTS
+        idx_auth_password_reset_requests_remote_created
+        ON auth_password_reset_requests(
+            remote_addr,
+            created_at
+        )
+    """)
+
+    conn.execute("""
+        CREATE INDEX IF NOT EXISTS
+        idx_auth_password_reset_requests_email_created
+        ON auth_password_reset_requests(
+            email_hash,
+            created_at
+        )
+    """)
