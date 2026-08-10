@@ -326,13 +326,209 @@ def relationship_intelligence():
         context
     )
 
-    evidence = manager.collect_evidence(
-        context
-    )
+    # relationship.evidence already contains every candidate
+    # gathered for that subject, so providers do not need to be
+    # executed a second time merely to count evidence.
 
-    relationships_payload = []
+    evidence = [
+        item
+        for relationship in relationships
+        for item in relationship.evidence
+    ]
 
+    provider_labels = {
+        "generic": "Generic inference",
+        "infrastructure": "Infrastructure hierarchy",
+        "manual": "Manual override",
+        "snmp": "SNMP",
+        "wireless": "Wireless association",
+        "agent": "BEACN Agent",
+        "lldp": "LLDP",
+        "cdp": "CDP",
+    }
+
+    reason_labels = {
+        "strong_wired_endpoint":
+            "Strong wired endpoint evidence",
+
+        "single_distribution_switch":
+            "Single known distribution switch",
+
+        "single_known_isp_gateway":
+            "Single known ISP gateway",
+
+        "configured_infrastructure_parent":
+            "Configured infrastructure hierarchy",
+
+        "manual_override":
+            "Manual topology override",
+
+        "wireless_association":
+            "Wireless client association",
+
+        "bridge_fdb":
+            "Switch forwarding table",
+
+        "lldp_neighbor":
+            "LLDP neighbour",
+
+        "agent_network":
+            "Agent network evidence",
+    }
+
+    # ---------------------------------------------------------
+    # Build one lookup table for every object participating in
+    # the topology graph.
+    # ---------------------------------------------------------
+
+    object_index = {}
+
+    for device in context["devices"]:
+        ip = str(
+            device.get("ip", "")
+        ).strip()
+
+        if not ip:
+            continue
+
+        ref = f"device:{ip}"
+
+        name = (
+            device.get("display_name")
+            or device.get("hostname")
+            or ip
+        )
+
+        evidence_text = " ".join(
+            str(value or "")
+            for value in (
+                device.get("display_name"),
+                device.get("hostname"),
+            )
+        ).lower()
+
+        is_core_service = (
+            "pihole" in evidence_text
+            or "pi-hole" in evidence_text
+        )
+
+        object_index[ref] = {
+            "ref": ref,
+            "object_kind": "device",
+            "name": name,
+            "ip": ip,
+            "hostname":
+                device.get("hostname"),
+            "device_type":
+                device.get("device_type")
+                or "unknown",
+            "vendor":
+                device.get("vendor")
+                or "",
+            "is_online":
+                bool(
+                    device.get("is_online")
+                ),
+            "agent_available":
+                bool(
+                    device.get(
+                        "agent_available"
+                    )
+                ),
+            "presentation_role": (
+                "core_service"
+                if is_core_service
+                else (
+                    "access_point"
+                    if device.get(
+                        "device_type"
+                    ) == "access_point"
+                    else "endpoint"
+                )
+            ),
+        }
+
+    for item in context["infrastructure"]:
+        ref = str(
+            item.get("ref", "")
+        ).strip()
+
+        if not ref:
+            continue
+
+        interfaces = (
+            item.get("interfaces")
+            if isinstance(
+                item.get("interfaces"),
+                list,
+            )
+            else []
+        )
+
+        primary_ip = next(
+            (
+                str(interface.get("address"))
+                for interface in interfaces
+                if isinstance(
+                    interface,
+                    dict,
+                )
+                and interface.get("address")
+            ),
+            None,
+        )
+
+        object_index[ref] = {
+            "ref": ref,
+            "object_kind":
+                "infrastructure",
+            "name":
+                item.get("name")
+                or ref,
+            "ip": primary_ip,
+            "infrastructure_type":
+                item.get(
+                    "infrastructure_type"
+                )
+                or "other",
+            "manufacturer":
+                item.get("manufacturer")
+                or "",
+            "model":
+                item.get("model")
+                or "",
+            "managed":
+                item.get("managed"),
+            "location":
+                item.get("location"),
+            "presentation_role":
+                "infrastructure",
+        }
+
+    def object_payload(ref):
+        if not ref:
+            return None
+
+        item = object_index.get(ref)
+
+        if item:
+            return dict(item)
+
+        return {
+            "ref": ref,
+            "object_kind": "unknown",
+            "name": ref,
+            "presentation_role": "unknown",
+        }
+
+    # ---------------------------------------------------------
+    # Relationships
+    # ---------------------------------------------------------
+
+    relationship_payload = []
     resolved_device_refs = set()
+
+    provider_relationship_counts = {}
 
     for relationship in relationships:
         if relationship.subject_ref.startswith(
@@ -342,12 +538,33 @@ def relationship_intelligence():
                 relationship.subject_ref
             )
 
-        relationships_payload.append({
+        provider_relationship_counts[
+            relationship.provider
+        ] = (
+            provider_relationship_counts.get(
+                relationship.provider,
+                0,
+            )
+            + 1
+        )
+
+        subject = object_payload(
+            relationship.subject_ref
+        )
+
+        parent = object_payload(
+            relationship.parent_ref
+        )
+
+        relationship_payload.append({
             "subject_ref":
                 relationship.subject_ref,
 
             "parent_ref":
                 relationship.parent_ref,
+
+            "subject": subject,
+            "parent": parent,
 
             "transport":
                 relationship.transport,
@@ -355,19 +572,58 @@ def relationship_intelligence():
             "provider":
                 relationship.provider,
 
+            "provider_label":
+                provider_labels.get(
+                    relationship.provider,
+                    relationship.provider.replace(
+                        "_",
+                        " ",
+                    ).title(),
+                ),
+
             "confidence":
                 relationship.confidence,
 
             "reason":
                 relationship.reason,
 
+            "reason_label":
+                reason_labels.get(
+                    relationship.reason,
+                    relationship.reason.replace(
+                        "_",
+                        " ",
+                    ).title(),
+                ),
+
+            "placement": (
+                "manual"
+                if relationship.provider
+                == "manual"
+                else "automatic"
+            ),
+
             "evidence": [
                 {
                     "provider":
                         item.provider,
 
+                    "provider_label":
+                        provider_labels.get(
+                            item.provider,
+                            item.provider.replace(
+                                "_",
+                                " ",
+                            ).title(),
+                        ),
+
                     "parent_ref":
                         item.parent_ref,
+
+                    "parent":
+                        object_payload(
+                            item.parent_ref
+                        ),
 
                     "transport":
                         item.transport,
@@ -377,63 +633,141 @@ def relationship_intelligence():
 
                     "reason":
                         item.reason,
+
+                    "reason_label":
+                        reason_labels.get(
+                            item.reason,
+                            item.reason.replace(
+                                "_",
+                                " ",
+                            ).title(),
+                        ),
                 }
                 for item
                 in relationship.evidence
             ],
         })
 
-    device_refs = {
-        f"device:{device['ip']}"
-        for device in context["devices"]
-        if device.get("ip")
+    # ---------------------------------------------------------
+    # Unresolved devices
+    # ---------------------------------------------------------
+
+    all_device_refs = {
+        ref
+        for ref, item
+        in object_index.items()
+        if item.get("object_kind")
+        == "device"
     }
 
-    infrastructure_refs = {
-        item["ref"]
-        for item
-        in context["infrastructure"]
-        if item.get("ref")
-    }
-
-    unresolved_device_refs = sorted(
-        device_refs -
-        resolved_device_refs
+    unresolved_refs = sorted(
+        all_device_refs
+        - resolved_device_refs
     )
 
-    provider_counts = {}
+    unresolved = [
+        object_payload(ref)
+        for ref in unresolved_refs
+    ]
+
+    unresolved_endpoints = [
+        item
+        for item in unresolved
+        if item.get(
+            "presentation_role"
+        ) == "endpoint"
+    ]
+
+    unresolved_access_points = [
+        item
+        for item in unresolved
+        if item.get(
+            "presentation_role"
+        ) == "access_point"
+    ]
+
+    unresolved_core_services = [
+        item
+        for item in unresolved
+        if item.get(
+            "presentation_role"
+        ) == "core_service"
+    ]
+
+    # ---------------------------------------------------------
+    # Provider health / counters
+    # ---------------------------------------------------------
+
+    provider_evidence_counts = {}
 
     for item in evidence:
-        provider_counts[
+        provider_evidence_counts[
             item.provider
         ] = (
-            provider_counts.get(
+            provider_evidence_counts.get(
                 item.provider,
                 0,
             )
             + 1
         )
 
-    providers = [
-        {
-            "name": provider.name,
-            "status": "healthy",
+    providers = []
+
+    for provider in manager.providers:
+        providers.append({
+            "name":
+                provider.name,
+
+            "label":
+                provider_labels.get(
+                    provider.name,
+                    provider.name.replace(
+                        "_",
+                        " ",
+                    ).title(),
+                ),
+
+            "status":
+                "healthy",
+
             "evidence_count":
-                provider_counts.get(
+                provider_evidence_counts.get(
                     provider.name,
                     0,
                 ),
-        }
-        for provider in manager.providers
-    ]
+
+            "relationship_count":
+                provider_relationship_counts.get(
+                    provider.name,
+                    0,
+                ),
+        })
+
+    infrastructure_count = sum(
+        1
+        for item in object_index.values()
+        if item.get("object_kind")
+        == "infrastructure"
+    )
 
     return jsonify({
         "ok": True,
 
+        "engine": {
+            "name":
+                "BEACN Relationship Manager",
+
+            "mode":
+                "evidence_driven",
+
+            "status":
+                "healthy",
+        },
+
         "summary": {
             "relationships":
                 len(
-                    relationships_payload
+                    relationship_payload
                 ),
 
             "device_relationships":
@@ -441,15 +775,41 @@ def relationship_intelligence():
                     resolved_device_refs
                 ),
 
+            "infrastructure_relationships":
+                sum(
+                    1
+                    for item
+                    in relationship_payload
+                    if item[
+                        "subject"
+                    ].get(
+                        "object_kind"
+                    )
+                    == "infrastructure"
+                ),
+
             "unresolved_devices":
                 len(
-                    unresolved_device_refs
+                    unresolved
+                ),
+
+            "unresolved_endpoints":
+                len(
+                    unresolved_endpoints
+                ),
+
+            "unresolved_access_points":
+                len(
+                    unresolved_access_points
+                ),
+
+            "core_services_without_parent":
+                len(
+                    unresolved_core_services
                 ),
 
             "infrastructure_objects":
-                len(
-                    infrastructure_refs
-                ),
+                infrastructure_count,
 
             "providers":
                 len(
@@ -466,11 +826,12 @@ def relationship_intelligence():
             providers,
 
         "relationships":
-            relationships_payload,
+            relationship_payload,
 
-        "unresolved_device_refs":
-            unresolved_device_refs,
+        "unresolved":
+            unresolved,
     })
+
 
 
 INFRASTRUCTURE_TYPES = {
