@@ -1,0 +1,114 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+
+  <meta
+    name="viewport"
+    content="width=device-width, initial-scale=1"
+  >
+
+  <title>Initial setup · BEACN</title>
+
+  <link
+    rel="stylesheet"
+    href="{{ url_for('static', filename='css/auth.css') }}?v={{ app_version }}"
+  >
+</head>
+
+<body>
+
+  <main class="auth-shell">
+
+    <section class="auth-card">
+
+      <div class="auth-brand">
+        <div class="auth-logo">B</div>
+
+        <div>
+          <strong>BEACN</strong>
+          <span>Network Intelligence</span>
+        </div>
+      </div>
+
+      <div class="auth-heading">
+        <small>FIRST-RUN SECURITY</small>
+
+        <h1>Create administrator</h1>
+
+        <p>
+          BEACN contains sensitive information about your
+          network. Create the administrator account that will
+          protect this installation.
+        </p>
+      </div>
+
+      {% if error %}
+        <div class="auth-error">
+          {{ error }}
+        </div>
+      {% endif %}
+
+      <form method="post">
+
+        <input
+          type="hidden"
+          name="_csrf"
+          value="{{ auth_csrf_token }}"
+        >
+
+        <label>
+          Administrator username
+
+          <input
+            type="text"
+            name="username"
+            autocomplete="username"
+            minlength="3"
+            maxlength="64"
+            required
+            autofocus
+          >
+        </label>
+
+        <label>
+          Password
+
+          <input
+            type="password"
+            name="password"
+            autocomplete="new-password"
+            minlength="12"
+            required
+          >
+        </label>
+
+        <label>
+          Confirm password
+
+          <input
+            type="password"
+            name="confirm_password"
+            autocomplete="new-password"
+            minlength="12"
+            required
+          >
+        </label>
+
+        <p class="auth-help">
+          Use at least 12 characters. BEACN stores only a
+          salted password hash.
+        </p>
+
+        <button type="submit">
+          Create administrator
+        </button>
+
+      </form>
+
+    </section>
+
+  </main>
+
+</body>
+</html>

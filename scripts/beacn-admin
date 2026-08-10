@@ -1,0 +1,643 @@
+#!/usr/bin/env bash
+
+set -u
+
+# ============================================================
+# BEACN Administration Console
+# ============================================================
+
+SCRIPT_PATH="$(readlink -f "$0" 2>/dev/null || printf '%s' "$0")"
+SCRIPT_DIR="$(cd "$(dirname "$SCRIPT_PATH")" && pwd)"
+DETECTED_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
+
+if [[ -f "$DETECTED_ROOT/docker-compose.yml" ]] || \
+   [[ -f "$DETECTED_ROOT/compose.yml" ]] || \
+   [[ -f "$DETECTED_ROOT/compose.yaml" ]]; then
+    BEACN_ROOT="$DETECTED_ROOT"
+else
+    BEACN_ROOT="${BEACN_ROOT:-/opt/beacn-console}"
+fi
+
+BEACN_SERVICE="${BEACN_SERVICE:-beacn-console}"
+
+if [[ -t 1 ]]; then
+    RESET=$'\033[0m'
+    BOLD=$'\033[1m'
+    CYAN=$'\033[36m'
+    GREEN=$'\033[32m'
+    YELLOW=$'\033[33m'
+    RED=$'\033[31m'
+    DIM=$'\033[2m'
+else
+    RESET=""
+    BOLD=""
+    CYAN=""
+    GREEN=""
+    YELLOW=""
+    RED=""
+    DIM=""
+fi
+
+
+line() {
+    printf '%s\n' "------------------------------------------------------------"
+}
+
+
+pause() {
+    printf '\n'
+    read -r -p "Press Enter to continue..." _
+}
+
+
+header() {
+    clear 2>/dev/null || true
+
+    printf '%s\n' "${CYAN}${BOLD}"
+    printf '%s\n' "██████╗ ███████╗ █████╗  ██████╗███╗   ██╗"
+    printf '%s\n' "██╔══██╗██╔════╝██╔══██╗██╔════╝████╗  ██║"
+    printf '%s\n' "██████╔╝█████╗  ███████║██║     ██╔██╗ ██║"
+    printf '%s\n' "██╔══██╗██╔══╝  ██╔══██║██║     ██║╚██╗██║"
+    printf '%s\n' "██████╔╝███████╗██║  ██║╚██████╗██║ ╚████║"
+    printf '%s\n' "╚═════╝ ╚══════╝╚═╝  ╚═╝ ╚═════╝╚═╝  ╚═══╝"
+    printf '%s\n' "${RESET}"
+
+    printf '%s\n' "${BOLD}Administration Console${RESET}"
+    line
+    printf ' Project   : %s\n' "$BEACN_ROOT"
+    printf ' Service   : %s\n' "$BEACN_SERVICE"
+    printf ' Host      : %s\n' "$(hostname)"
+    line
+}
+
+
+require_project() {
+    if [[ ! -d "$BEACN_ROOT" ]]; then
+        printf '%s\n' \
+            "${RED}BEACN project directory not found:${RESET} $BEACN_ROOT"
+        exit 1
+    fi
+
+    cd "$BEACN_ROOT" || exit 1
+
+    if ! docker compose config >/dev/null 2>&1; then
+        printf '%s\n' \
+            "${RED}Docker Compose configuration could not be loaded.${RESET}"
+        printf 'Expected project: %s\n' "$BEACN_ROOT"
+        exit 1
+    fi
+}
+
+
+container_running() {
+    local id
+
+    id="$(
+        docker compose ps -q "$BEACN_SERVICE" 2>/dev/null
+    )"
+
+    [[ -n "$id" ]] &&
+    [[ "$(docker inspect -f '{{.State.Running}}' "$id" 2>/dev/null)" == "true" ]]
+}
+
+
+require_running_container() {
+    if ! container_running; then
+        printf '%s\n' \
+            "${RED}BEACN console is not currently running.${RESET}"
+        printf '%s\n' \
+            "Start it from Console Services first."
+        return 1
+    fi
+
+    return 0
+}
+
+
+confirm() {
+    local prompt="${1:-Continue?}"
+    local answer
+
+    read -r -p "$prompt [y/N]: " answer
+
+    case "${answer,,}" in
+        y|yes)
+            return 0
+            ;;
+        *)
+            return 1
+            ;;
+    esac
+}
+
+
+list_users() {
+    header
+
+    printf '%s\n\n' "${BOLD}BEACN Users${RESET}"
+
+    require_running_container || {
+        pause
+        return
+    }
+
+    docker compose exec -T "$BEACN_SERVICE" \
+        python -m beacn.admin list-users
+
+    pause
+}
+
+
+reset_password() {
+    header
+
+    printf '%s\n' "${BOLD}Reset User Password${RESET}"
+    printf '%s\n\n' \
+        "${YELLOW}This will invalidate all existing sessions for the account.${RESET}"
+
+    require_running_container || {
+        pause
+        return
+    }
+
+    read -r -p "Username: " username
+
+    if [[ -z "$username" ]]; then
+        printf '%s\n' "${RED}Username cannot be blank.${RESET}"
+        pause
+        return
+    fi
+
+    printf '\n'
+
+    docker compose exec "$BEACN_SERVICE" \
+        python -m beacn.admin reset-password "$username"
+
+    pause
+}
+
+
+set_recovery_email() {
+    header
+
+    printf '%s\n\n' "${BOLD}Set Recovery Email${RESET}"
+
+    require_running_container || {
+        pause
+        return
+    }
+
+    read -r -p "Username: " username
+    read -r -p "Recovery email: " email
+
+    if [[ -z "$username" || -z "$email" ]]; then
+        printf '%s\n' \
+            "${RED}Username and email are required.${RESET}"
+        pause
+        return
+    fi
+
+    printf '\n'
+
+    docker compose exec -T "$BEACN_SERVICE" \
+        python -m beacn.admin set-email \
+        "$username" "$email"
+
+    pause
+}
+
+
+logout_all_sessions() {
+    header
+
+    printf '%s\n' "${BOLD}Log Out All Sessions${RESET}"
+    printf '%s\n\n' \
+        "${YELLOW}Every browser session for this user will be invalidated.${RESET}"
+
+    require_running_container || {
+        pause
+        return
+    }
+
+    read -r -p "Username: " username
+
+    if [[ -z "$username" ]]; then
+        printf '%s\n' "${RED}Username cannot be blank.${RESET}"
+        pause
+        return
+    fi
+
+    if ! confirm "Invalidate all sessions for '$username'?"; then
+        return
+    fi
+
+    printf '\n'
+
+    docker compose exec -T "$BEACN_SERVICE" \
+        python -m beacn.admin logout-all "$username"
+
+    pause
+}
+
+
+security_menu() {
+    local choice
+
+    while true; do
+        header
+
+        printf '%s\n\n' "${BOLD}Security & Recovery${RESET}"
+
+        printf '%s\n' "  1) List users"
+        printf '%s\n' "  2) Reset user password"
+        printf '%s\n' "  3) Set recovery email"
+        printf '%s\n' "  4) Log out all user sessions"
+        printf '\n'
+        printf '%s\n' "  0) Back"
+        printf '\n'
+
+        read -r -p "Choose an option: " choice
+
+        case "$choice" in
+            1) list_users ;;
+            2) reset_password ;;
+            3) set_recovery_email ;;
+            4) logout_all_sessions ;;
+            0) return ;;
+            *) ;;
+        esac
+    done
+}
+
+
+show_status() {
+    header
+
+    printf '%s\n\n' "${BOLD}BEACN Console Status${RESET}"
+
+    docker compose ps
+
+    printf '\n'
+
+    if container_running; then
+        printf '%s\n' \
+            "${GREEN}● BEACN console is running${RESET}"
+    else
+        printf '%s\n' \
+            "${RED}● BEACN console is not running${RESET}"
+    fi
+
+    pause
+}
+
+
+restart_console() {
+    header
+
+    printf '%s\n' "${BOLD}Restart BEACN Console${RESET}"
+    printf '\n'
+
+    if ! confirm "Restart BEACN now?"; then
+        return
+    fi
+
+    printf '\n'
+    docker compose restart "$BEACN_SERVICE"
+
+    printf '\n'
+    docker compose ps "$BEACN_SERVICE"
+
+    pause
+}
+
+
+start_console() {
+    header
+
+    printf '%s\n\n' "${BOLD}Start BEACN Console${RESET}"
+
+    docker compose up -d "$BEACN_SERVICE"
+
+    printf '\n'
+    docker compose ps "$BEACN_SERVICE"
+
+    pause
+}
+
+
+stop_console() {
+    header
+
+    printf '%s\n' "${BOLD}Stop BEACN Console${RESET}"
+    printf '%s\n\n' \
+        "${YELLOW}The BEACN web interface will become unavailable.${RESET}"
+
+    if ! confirm "Stop BEACN now?"; then
+        return
+    fi
+
+    docker compose stop "$BEACN_SERVICE"
+
+    pause
+}
+
+
+rebuild_console() {
+    header
+
+    printf '%s\n' "${BOLD}Rebuild BEACN Console${RESET}"
+    printf '%s\n\n' \
+        "${YELLOW}This rebuilds the local image and recreates the console container.${RESET}"
+
+    if ! confirm "Rebuild and restart BEACN?"; then
+        return
+    fi
+
+    printf '\n'
+    printf '%s\n' "${CYAN}Building BEACN...${RESET}"
+    printf '\n'
+
+    if ! docker compose build "$BEACN_SERVICE"; then
+        printf '\n%s\n' \
+            "${RED}Build failed. Existing container was not replaced.${RESET}"
+        pause
+        return
+    fi
+
+    printf '\n'
+    printf '%s\n' "${CYAN}Starting rebuilt console...${RESET}"
+    printf '\n'
+
+    docker compose up -d "$BEACN_SERVICE"
+
+    printf '\n'
+    docker compose ps "$BEACN_SERVICE"
+
+    pause
+}
+
+
+services_menu() {
+    local choice
+
+    while true; do
+        header
+
+        printf '%s\n\n' "${BOLD}Console Services${RESET}"
+
+        printf '%s\n' "  1) Show status"
+        printf '%s\n' "  2) Restart BEACN console"
+        printf '%s\n' "  3) Start BEACN console"
+        printf '%s\n' "  4) Stop BEACN console"
+        printf '%s\n' "  5) Rebuild and restart"
+        printf '\n'
+        printf '%s\n' "  0) Back"
+        printf '\n'
+
+        read -r -p "Choose an option: " choice
+
+        case "$choice" in
+            1) show_status ;;
+            2) restart_console ;;
+            3) start_console ;;
+            4) stop_console ;;
+            5) rebuild_console ;;
+            0) return ;;
+            *) ;;
+        esac
+    done
+}
+
+
+recent_logs() {
+    header
+
+    printf '%s\n\n' "${BOLD}Recent BEACN Logs${RESET}"
+
+    docker compose logs \
+        --tail=100 \
+        "$BEACN_SERVICE"
+
+    pause
+}
+
+
+follow_logs() {
+    header
+
+    printf '%s\n' "${BOLD}Live BEACN Logs${RESET}"
+    printf '%s\n\n' \
+        "${DIM}Press Ctrl+C to return to the menu.${RESET}"
+
+    docker compose logs \
+        --follow \
+        --tail=50 \
+        "$BEACN_SERVICE"
+
+    printf '\n'
+    pause
+}
+
+
+logs_menu() {
+    local choice
+
+    while true; do
+        header
+
+        printf '%s\n\n' "${BOLD}Logs${RESET}"
+
+        printf '%s\n' "  1) Show last 100 lines"
+        printf '%s\n' "  2) Follow live logs"
+        printf '\n'
+        printf '%s\n' "  0) Back"
+        printf '\n'
+
+        read -r -p "Choose an option: " choice
+
+        case "$choice" in
+            1) recent_logs ;;
+            2) follow_logs ;;
+            0) return ;;
+            *) ;;
+        esac
+    done
+}
+
+
+database_health() {
+    header
+
+    printf '%s\n\n' "${BOLD}Database & Authentication Health${RESET}"
+
+    require_running_container || {
+        pause
+        return
+    }
+
+    docker compose exec -T "$BEACN_SERVICE" \
+        python - <<'PY'
+from beacn.common import db
+
+checks = []
+
+with db() as conn:
+    integrity = conn.execute(
+        "PRAGMA integrity_check"
+    ).fetchone()[0]
+
+    users = conn.execute(
+        "SELECT COUNT(*) FROM auth_users"
+    ).fetchone()[0]
+
+    enabled = conn.execute(
+        """
+        SELECT COUNT(*)
+        FROM auth_users
+        WHERE is_enabled = 1
+        """
+    ).fetchone()[0]
+
+    reset_count = conn.execute(
+        """
+        SELECT COUNT(*)
+        FROM auth_password_resets
+        WHERE used_at IS NULL
+        """
+    ).fetchone()[0]
+
+checks.append(
+    ("Database integrity", integrity)
+)
+checks.append(
+    ("Users", users)
+)
+checks.append(
+    ("Enabled users", enabled)
+)
+checks.append(
+    ("Unused reset tokens", reset_count)
+)
+
+print("")
+
+for name, value in checks:
+    print(f"{name}: {value}")
+
+print("")
+
+if integrity == "ok" and enabled > 0:
+    print("BEACN authentication health: OK")
+else:
+    print("BEACN authentication health: ATTENTION REQUIRED")
+PY
+
+    pause
+}
+
+
+system_information() {
+    header
+
+    printf '%s\n\n' "${BOLD}BEACN Information${RESET}"
+
+    printf 'Project directory : %s\n' "$BEACN_ROOT"
+    printf 'Host              : %s\n' "$(hostname)"
+    printf 'Docker            : %s\n' \
+        "$(docker --version 2>/dev/null || printf 'Unavailable')"
+
+    if [[ -f version.py ]]; then
+        printf '\n'
+        printf '%s\n' "Version file:"
+        grep -E \
+            'VERSION|APP_VERSION|__version__' \
+            version.py 2>/dev/null || cat version.py
+    fi
+
+    printf '\n'
+    printf '%s\n' "Git:"
+    git --no-pager log \
+        -1 \
+        --oneline \
+        --decorate 2>/dev/null || true
+
+    printf '\n'
+    printf '%s\n' "Working tree:"
+    git status --short 2>/dev/null || true
+
+    pause
+}
+
+
+diagnostics_menu() {
+    local choice
+
+    while true; do
+        header
+
+        printf '%s\n\n' "${BOLD}Diagnostics${RESET}"
+
+        printf '%s\n' "  1) Database & authentication health"
+        printf '%s\n' "  2) BEACN system information"
+        printf '%s\n' "  3) Container status"
+        printf '\n'
+        printf '%s\n' "  0) Back"
+        printf '\n'
+
+        read -r -p "Choose an option: " choice
+
+        case "$choice" in
+            1) database_health ;;
+            2) system_information ;;
+            3) show_status ;;
+            0) return ;;
+            *) ;;
+        esac
+    done
+}
+
+
+main_menu() {
+    local choice
+
+    while true; do
+        header
+
+        if container_running; then
+            printf '%s\n' \
+                " ${GREEN}● Console running${RESET}"
+        else
+            printf '%s\n' \
+                " ${RED}● Console stopped${RESET}"
+        fi
+
+        printf '\n'
+
+        printf '%s\n' "  1) Security & recovery"
+        printf '%s\n' "  2) Console services"
+        printf '%s\n' "  3) Diagnostics"
+        printf '%s\n' "  4) Logs"
+        printf '\n'
+        printf '%s\n' "  0) Exit"
+        printf '\n'
+
+        read -r -p "Choose an option: " choice
+
+        case "$choice" in
+            1) security_menu ;;
+            2) services_menu ;;
+            3) diagnostics_menu ;;
+            4) logs_menu ;;
+            0)
+                printf '\n%s\n' "Leaving BEACN Administration Console."
+                exit 0
+                ;;
+            *)
+                ;;
+        esac
+    done
+}
+
+
+require_project
+main_menu

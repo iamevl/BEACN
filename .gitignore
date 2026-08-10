@@ -64,3 +64,6 @@ node-windows/agent/dist/
 
 # Runtime files
 node-windows/agent/agent.log
+
+# Local BEACN authentication secret
+data/beacn-secret-key

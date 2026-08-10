@@ -1,0 +1,817 @@
+<!doctype html>
+<html lang="en">
+
+<head>
+  <meta charset="utf-8">
+
+  <meta
+    name="viewport"
+    content="width=device-width, initial-scale=1"
+  >
+
+  <title>Settings · BEACN</title>
+
+  <link
+    rel="stylesheet"
+    href="{{ url_for('static', filename='branding/css/beacn-tokens.css') }}?v={{ app_version }}"
+  >
+
+  <link
+    rel="stylesheet"
+    href="{{ url_for('static', filename='css/app.css') }}?v={{ app_version }}"
+  >
+</head>
+
+<body>
+
+  <main class="settings-page">
+
+    <header class="settings-page-header">
+
+      <div>
+        <a
+          href="{{ url_for('index') }}"
+          class="settings-back-link"
+        >
+          ← Back to BEACN
+        </a>
+
+        <div class="settings-title-row">
+          <div>
+            <h1>Settings</h1>
+
+            <p class="muted">
+              Configure this BEACN installation.
+            </p>
+          </div>
+        </div>
+      </div>
+
+      <div class="settings-user-chip">
+        <span class="beacn-user-avatar">
+          {{ (user.username[:1] if user else 'A')|upper }}
+        </span>
+
+        <div>
+          <strong>
+            {{ user.username if user else 'Administrator' }}
+          </strong>
+
+          <small>Administrator</small>
+        </div>
+      </div>
+
+    </header>
+
+
+    <nav class="settings-nav">
+      <a href="#general">General</a>
+      <a href="#network">Network</a>
+      <a href="#relationships">Relationships</a>
+      <a href="#integrations">Integrations</a>
+      <a href="#security">Security</a>
+      <a href="#users">Users</a>
+      <a href="#agents">Agents</a>
+      <a href="#backups">Backups</a>
+      <a href="#audit">Audit</a>
+      <a href="#about">About</a>
+    </nav>
+
+
+    <section
+      class="settings-group"
+      id="general"
+    >
+      <div class="settings-group-heading">
+        <span>⚙</span>
+
+        <div>
+          <h2>General</h2>
+
+          <p class="muted">
+            Core application behaviour and presentation.
+          </p>
+        </div>
+      </div>
+
+      <div class="settings-grid">
+
+        <article class="card settings-section">
+          <h3>Application</h3>
+
+          <div class="settings-row">
+            <div>
+              <strong>BEACN name</strong>
+              <small>Instance display name</small>
+            </div>
+
+            <span class="badge">BEACN</span>
+          </div>
+
+          <div class="settings-row">
+            <div>
+              <strong>Theme</strong>
+              <small>Interface appearance</small>
+            </div>
+
+            <span class="badge">Dark</span>
+          </div>
+        </article>
+
+        <article class="card settings-section">
+          <h3>Regional</h3>
+
+          <div class="settings-row">
+            <div>
+              <strong>Timezone</strong>
+              <small>Display and event timestamps</small>
+            </div>
+
+            <span class="badge">System</span>
+          </div>
+
+          <div class="settings-row">
+            <div>
+              <strong>Update channel</strong>
+              <small>BEACN release preference</small>
+            </div>
+
+            <span class="badge">Stable</span>
+          </div>
+        </article>
+
+      </div>
+    </section>
+
+
+    <section
+      class="settings-group"
+      id="network"
+    >
+      <div class="settings-group-heading">
+        <span>🌐</span>
+
+        <div>
+          <h2>Network discovery</h2>
+
+          <p class="muted">
+            Control what BEACN scans and how discovery operates.
+          </p>
+        </div>
+      </div>
+
+      <div class="settings-grid">
+
+        <article class="card settings-section">
+          <h3>Discovery scope</h3>
+
+          <div class="settings-row">
+            <div>
+              <strong>Subnet</strong>
+              <small>Current monitored network</small>
+            </div>
+
+            <span class="badge">
+              {{ subnet if subnet is defined else 'Configured' }}
+            </span>
+          </div>
+
+          <div class="settings-placeholder">
+            Editable discovery scope coming next.
+          </div>
+        </article>
+
+        <article class="card settings-section">
+          <h3>Scanning</h3>
+
+          <div class="settings-row">
+            <div>
+              <strong>Network discovery</strong>
+              <small>ARP, Nmap and active probes</small>
+            </div>
+
+            <span class="status-dot good">
+              Enabled
+            </span>
+          </div>
+
+          <div class="settings-placeholder">
+            Scan interval and intensity controls coming next.
+          </div>
+        </article>
+
+      </div>
+    </section>
+
+
+    <section
+      class="settings-group"
+      id="relationships"
+    >
+      <div class="settings-group-heading">
+        <span>🧠</span>
+
+        <div>
+          <h2>Relationship Manager</h2>
+
+          <p class="muted">
+            Configure evidence-driven topology behaviour.
+          </p>
+        </div>
+      </div>
+
+      <div class="settings-grid">
+
+        <article class="card settings-section">
+          <h3>Engine</h3>
+
+          <div class="settings-row">
+            <div>
+              <strong>Automatic topology</strong>
+              <small>Relationship Manager controls placement</small>
+            </div>
+
+            <span class="status-dot good">
+              Enabled
+            </span>
+          </div>
+
+          <div class="settings-row">
+            <div>
+              <strong>Confidence threshold</strong>
+              <small>Minimum accepted relationship confidence</small>
+            </div>
+
+            <span class="badge">Default</span>
+          </div>
+        </article>
+
+        <article class="card settings-section">
+          <h3>Evidence providers</h3>
+
+          <div class="settings-row">
+            <div>
+              <strong>Infrastructure hierarchy</strong>
+            </div>
+
+            <span class="status-dot good">
+              Active
+            </span>
+          </div>
+
+          <div class="settings-row">
+            <div>
+              <strong>Generic inference</strong>
+            </div>
+
+            <span class="status-dot good">
+              Active
+            </span>
+          </div>
+        </article>
+
+      </div>
+    </section>
+
+
+    <section
+      class="settings-group"
+      id="integrations"
+    >
+      <div class="settings-group-heading">
+        <span>🔌</span>
+
+        <div>
+          <h2>Integrations</h2>
+
+          <p class="muted">
+            Network platforms and evidence sources.
+          </p>
+        </div>
+      </div>
+
+      <div class="settings-grid">
+
+        <article class="card settings-section">
+          <h3>Network management</h3>
+
+          <div class="settings-provider">
+            <span>SNMP</span>
+            <span class="badge">Available</span>
+          </div>
+
+          <div class="settings-provider">
+            <span>UniFi</span>
+            <span class="badge">Not configured</span>
+          </div>
+
+          <div class="settings-provider">
+            <span>Omada</span>
+            <span class="badge">Not configured</span>
+          </div>
+
+          <div class="settings-provider">
+            <span>Meraki</span>
+            <span class="badge">Not configured</span>
+          </div>
+        </article>
+
+        <article class="card settings-section">
+          <h3>Notifications</h3>
+
+          <div class="settings-provider">
+            <span>Email</span>
+            <span class="badge">Not configured</span>
+          </div>
+
+          <div class="settings-provider">
+            <span>Teams</span>
+            <span class="badge">Not configured</span>
+          </div>
+
+          <div class="settings-provider">
+            <span>Webhook</span>
+            <span class="badge">Not configured</span>
+          </div>
+        </article>
+
+      </div>
+    </section>
+
+
+    <section
+      class="settings-group"
+      id="security"
+    >
+      <div class="settings-group-heading">
+        <span>🔐</span>
+
+        <div>
+          <h2>Security</h2>
+
+          <p class="muted">
+            Authentication, passwords and session controls.
+          </p>
+        </div>
+      </div>
+
+      {% if message %}
+        <div class="settings-message settings-message-success">
+          {{ message }}
+        </div>
+      {% endif %}
+
+      {% if error %}
+        <div class="settings-message settings-message-error">
+          {{ error }}
+        </div>
+      {% endif %}
+
+      <div class="settings-grid">
+
+        <article class="card settings-section">
+
+          <h3>Change password</h3>
+
+          <form
+            method="post"
+            class="settings-form"
+          >
+            <input
+              type="hidden"
+              name="_csrf"
+              value="{{ auth_csrf_token }}"
+            >
+
+            <input
+              type="hidden"
+              name="action"
+              value="change_password"
+            >
+
+            <label>
+              Current password
+
+              <input
+                type="password"
+                name="current_password"
+                autocomplete="current-password"
+                required
+              >
+            </label>
+
+            <label>
+              New password
+
+              <input
+                type="password"
+                name="new_password"
+                autocomplete="new-password"
+                minlength="12"
+                required
+              >
+            </label>
+
+            <label>
+              Confirm new password
+
+              <input
+                type="password"
+                name="confirm_password"
+                autocomplete="new-password"
+                minlength="12"
+                required
+              >
+            </label>
+
+            <button type="submit">
+              Change password
+            </button>
+
+          </form>
+
+        </article>
+
+
+        <article class="card settings-section">
+
+          <h3>Session policy</h3>
+
+          <form
+            method="post"
+            class="settings-form"
+          >
+            <input
+              type="hidden"
+              name="_csrf"
+              value="{{ auth_csrf_token }}"
+            >
+
+            <input
+              type="hidden"
+              name="action"
+              value="session_timeout"
+            >
+
+            <label>
+              Session timeout
+
+              <div class="settings-input-suffix">
+                <input
+                  type="number"
+                  name="session_timeout_hours"
+                  min="1"
+                  max="168"
+                  value="{{ session_timeout_hours }}"
+                  required
+                >
+
+                <span>hours</span>
+              </div>
+            </label>
+
+            <button type="submit">
+              Save session policy
+            </button>
+
+          </form>
+
+          <form
+            method="post"
+            class="settings-form settings-danger-form"
+          >
+            <input
+              type="hidden"
+              name="_csrf"
+              value="{{ auth_csrf_token }}"
+            >
+
+            <input
+              type="hidden"
+              name="action"
+              value="logout_all"
+            >
+
+            <div>
+              <strong>Log out all sessions</strong>
+
+              <p class="muted">
+                Invalidates every active session for this account,
+                including the current browser.
+              </p>
+            </div>
+
+            <button
+              type="submit"
+              class="secondary"
+            >
+              Log out everywhere
+            </button>
+
+          </form>
+
+        </article>
+
+      </div>
+
+
+      <article
+        class="card settings-section settings-wide settings-login-history"
+        id="login-history"
+      >
+        <div class="settings-row">
+          <div>
+            <h3>Login history</h3>
+
+            <p class="muted">
+              The 25 most recent authentication attempts.
+            </p>
+          </div>
+
+          <span class="badge">
+            {{ login_events|length }}
+          </span>
+        </div>
+
+        <div class="settings-table-wrap">
+
+          <table class="settings-table">
+
+            <thead>
+              <tr>
+                <th>Time</th>
+                <th>Username</th>
+                <th>Source</th>
+                <th>Result</th>
+              </tr>
+            </thead>
+
+            <tbody>
+
+              {% for event in login_events %}
+                <tr>
+                  <td>
+                    {{ event.created_at }}
+                  </td>
+
+                  <td>
+                    {{ event.username or 'Unknown' }}
+                  </td>
+
+                  <td>
+                    {{ event.remote_addr or 'Unknown' }}
+                  </td>
+
+                  <td>
+                    {% if event.success %}
+                      <span class="status-dot good">
+                        Successful
+                      </span>
+                    {% else %}
+                      <span class="status-dot">
+                        Failed
+                      </span>
+                    {% endif %}
+                  </td>
+                </tr>
+
+              {% else %}
+                <tr>
+                  <td colspan="4">
+                    No login history recorded yet.
+                  </td>
+                </tr>
+              {% endfor %}
+
+            </tbody>
+
+          </table>
+
+        </div>
+
+      </article>
+
+    </section>
+
+
+    <section
+      class="settings-group"
+      id="users"
+    >
+      <div class="settings-group-heading">
+        <span>👥</span>
+
+        <div>
+          <h2>Users</h2>
+
+          <p class="muted">
+            Accounts permitted to access this installation.
+          </p>
+        </div>
+      </div>
+
+      <article class="card settings-section settings-wide">
+
+        <div class="settings-user-entry">
+          <span class="beacn-user-avatar">
+            {{ (user.username[:1] if user else 'A')|upper }}
+          </span>
+
+          <div>
+            <strong>
+              {{ user.username if user else 'Administrator' }}
+            </strong>
+
+            <small>Administrator · Enabled</small>
+          </div>
+
+          <span class="status-dot good">
+            Active
+          </span>
+        </div>
+
+        <div class="settings-placeholder">
+          Multiple-user administration will plug in here.
+        </div>
+
+      </article>
+    </section>
+
+
+    <section
+      class="settings-group"
+      id="agents"
+    >
+      <div class="settings-group-heading">
+        <span>💻</span>
+
+        <div>
+          <h2>Agents</h2>
+
+          <p class="muted">
+            Manage BEACN endpoint agents and deployment.
+          </p>
+        </div>
+      </div>
+
+      <div class="settings-grid">
+        <article class="card settings-section">
+          <h3>Windows Agent</h3>
+          <div class="settings-placeholder">
+            Installer, tokens and upgrades.
+          </div>
+        </article>
+
+        <article class="card settings-section">
+          <h3>Linux Agent</h3>
+          <div class="settings-placeholder">
+            Linux deployment support.
+          </div>
+        </article>
+      </div>
+    </section>
+
+
+    <section
+      class="settings-group"
+      id="backups"
+    >
+      <div class="settings-group-heading">
+        <span>💾</span>
+
+        <div>
+          <h2>Backups</h2>
+
+          <p class="muted">
+            Protect BEACN configuration and inventory data.
+          </p>
+        </div>
+      </div>
+
+      <article class="card settings-section settings-wide">
+        <div class="settings-actions">
+          <button
+            type="button"
+            class="secondary"
+            disabled
+          >
+            Export configuration
+          </button>
+
+          <button
+            type="button"
+            class="secondary"
+            disabled
+          >
+            Import configuration
+          </button>
+        </div>
+
+        <div class="settings-placeholder">
+          Backup and restore controls coming later.
+        </div>
+      </article>
+    </section>
+
+
+    <section
+      class="settings-group"
+      id="audit"
+    >
+      <div class="settings-group-heading">
+        <span>▤</span>
+
+        <div>
+          <h2>Audit log</h2>
+
+          <p class="muted">
+            Authentication and administrative activity.
+          </p>
+        </div>
+      </div>
+
+      <article class="card settings-section settings-wide">
+        <div class="settings-placeholder">
+          Login events already exist in the BEACN database.
+          The audit viewer will surface them here.
+        </div>
+      </article>
+    </section>
+
+
+    <section
+      class="settings-group"
+      id="about"
+    >
+      <div class="settings-group-heading">
+        <span>ⓘ</span>
+
+        <div>
+          <h2>About</h2>
+
+          <p class="muted">
+            Installation and release information.
+          </p>
+        </div>
+      </div>
+
+      <article class="card settings-section settings-wide">
+
+        <div class="settings-row">
+          <div>
+            <strong>BEACN version</strong>
+          </div>
+
+          <span class="badge">
+            v{{ app_version }}
+          </span>
+        </div>
+
+        <div class="settings-row">
+          <div>
+            <strong>Relationship architecture</strong>
+          </div>
+
+          <span class="badge">
+            Evidence driven
+          </span>
+        </div>
+
+      </article>
+    </section>
+
+
+    <section class="card settings-logout-section">
+
+      <div>
+        <h2>Current session</h2>
+
+        <p class="muted">
+          End your authenticated BEACN session.
+        </p>
+      </div>
+
+      <form
+        method="post"
+        action="{{ url_for('auth_logout') }}"
+      >
+        <input
+          type="hidden"
+          name="_csrf"
+          value="{{ auth_csrf_token }}"
+        >
+
+        <button
+          type="submit"
+          class="secondary"
+        >
+          Logout
+        </button>
+      </form>
+
+    </section>
+
+  </main>
+
+</body>
+</html>

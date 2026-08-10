@@ -62,7 +62,150 @@
   <div class="header-meta">
     <div class="release-badges">
       <span class="badge">v{{ app_version }}</span>
-      <span class="badge">{{ app_stage }}</span>
+
+      <details class="beacn-user-menu">
+        <summary
+          class="beacn-user-menu-trigger"
+          title="Account and settings"
+        >
+          <span
+            class="beacn-user-avatar"
+            aria-hidden="true"
+          >
+            {{ (auth_user.username[:1] if auth_user else 'A')|upper }}
+          </span>
+
+          <span class="beacn-user-trigger-copy">
+            <strong class="beacn-user-name">
+              {{ auth_user.username if auth_user else 'Account' }}
+            </strong>
+          </span>
+
+          <span
+            class="beacn-user-chevron"
+            aria-hidden="true"
+          >
+            ▾
+          </span>
+        </summary>
+
+        <div class="beacn-user-dropdown">
+
+          <div class="beacn-user-dropdown-header">
+            <span
+              class="beacn-user-avatar beacn-user-avatar-large"
+              aria-hidden="true"
+            >
+              {{ (auth_user.username[:1] if auth_user else 'A')|upper }}
+            </span>
+
+            <div>
+              <strong>
+                {{ auth_user.username if auth_user else 'Account' }}
+              </strong>
+
+              <small>
+                Administrator
+              </small>
+            </div>
+          </div>
+
+          <div class="beacn-user-dropdown-divider"></div>
+
+          <a
+            href="{{ url_for('settings_page') }}"
+            class="beacn-user-dropdown-item"
+          >
+            <svg
+              class="beacn-menu-icon"
+              viewBox="0 0 24 24"
+              aria-hidden="true"
+            >
+              <path d="M12 15.5a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7Z"/>
+              <path d="M19.4 13a7.8 7.8 0 0 0 0-2l2-1.6-2-3.4-2.4 1a8 8 0 0 0-1.7-1L15 3h-4l-.4 3a8 8 0 0 0-1.7 1l-2.4-1-2 3.4 2 1.6a7.8 7.8 0 0 0 0 2l-2 1.6 2 3.4 2.4-1a8 8 0 0 0 1.7 1l.4 3h4l.4-3a8 8 0 0 0 1.7-1l2.4 1 2-3.4-2-1.6Z"/>
+            </svg>
+            <span>Settings</span>
+          </a>
+
+          <a
+            href="{{ url_for('settings_page') }}#security"
+            class="beacn-user-dropdown-item"
+          >
+            <svg
+              class="beacn-menu-icon"
+              viewBox="0 0 24 24"
+              aria-hidden="true"
+            >
+              <rect x="5" y="10" width="14" height="10" rx="2"/>
+              <path d="M8 10V7a4 4 0 0 1 8 0v3"/>
+            </svg>
+            <span>Security</span>
+          </a>
+
+          <a
+            href="{{ url_for('settings_page') }}#users"
+            class="beacn-user-dropdown-item"
+          >
+            <svg
+              class="beacn-menu-icon"
+              viewBox="0 0 24 24"
+              aria-hidden="true"
+            >
+              <circle cx="9" cy="8" r="3"/>
+              <path d="M3.5 19a5.5 5.5 0 0 1 11 0"/>
+              <circle cx="17" cy="9" r="2"/>
+              <path d="M15.5 14.5A4.5 4.5 0 0 1 21 19"/>
+            </svg>
+            <span>Users</span>
+          </a>
+
+          <a
+            href="{{ url_for('settings_page') }}#audit"
+            class="beacn-user-dropdown-item"
+          >
+            <svg
+              class="beacn-menu-icon"
+              viewBox="0 0 24 24"
+              aria-hidden="true"
+            >
+              <rect x="5" y="4" width="14" height="16" rx="2"/>
+              <path d="M9 8h6M9 12h6M9 16h4"/>
+            </svg>
+            <span>Audit log</span>
+          </a>
+
+          <div class="beacn-user-dropdown-divider"></div>
+
+          <form
+            method="post"
+            action="{{ url_for('auth_logout') }}"
+            class="beacn-user-logout-form"
+          >
+            <input
+              type="hidden"
+              name="_csrf"
+              value="{{ auth_csrf_token }}"
+            >
+
+            <button
+              type="submit"
+              class="beacn-user-dropdown-item beacn-user-logout"
+            >
+              <svg
+                class="beacn-menu-icon"
+                viewBox="0 0 24 24"
+                aria-hidden="true"
+              >
+                <path d="M10 5H6a2 2 0 0 0-2 2v10a2 2 0 0 0 2 2h4"/>
+                <path d="M14 8l4 4-4 4"/>
+                <path d="M18 12H9"/>
+              </svg>
+              <span>Logout</span>
+            </button>
+          </form>
+
+        </div>
+      </details>
     </div>
 
     <label class="scope-selector">
@@ -654,6 +797,42 @@
   <script
     src="{{ url_for('static', filename='js/relationship-intelligence.js') }}?v={{ app_version }}"
   ></script>
+
+
+  <script>
+    document.addEventListener("DOMContentLoaded", () => {
+      const menu =
+        document.querySelector(".beacn-user-menu");
+
+      if (!menu) {
+        return;
+      }
+
+      document.addEventListener(
+        "click",
+        event => {
+          if (
+            menu.open &&
+            !menu.contains(event.target)
+          ) {
+            menu.open = false;
+          }
+        }
+      );
+
+      document.addEventListener(
+        "keydown",
+        event => {
+          if (
+            event.key === "Escape" &&
+            menu.open
+          ) {
+            menu.open = false;
+          }
+        }
+      );
+    });
+  </script>
 
 </body>
 </html>
