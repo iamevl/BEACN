@@ -712,6 +712,13 @@ def auth_setup():
                 )
             ).strip()
 
+            email = str(
+                request.form.get(
+                    "email",
+                    "",
+                )
+            ).strip().lower()
+
             password = str(
                 request.form.get(
                     "password",
@@ -733,6 +740,16 @@ def auth_setup():
                 error = (
                     "Username must be between "
                     "3 and 64 characters."
+                )
+
+            elif (
+                not email
+                or "@" not in email
+                or len(email) > 254
+            ):
+                error = (
+                    "Enter a valid recovery "
+                    "email address."
                 )
 
             elif len(password) < 12:
@@ -763,15 +780,17 @@ def auth_setup():
                         cursor = conn.execute("""
                             INSERT INTO auth_users (
                                 username,
+                                email,
                                 password_hash,
                                 is_admin,
                                 is_enabled,
                                 created_at,
                                 updated_at
                             )
-                            VALUES (?, ?, 1, 1, ?, ?)
+                            VALUES (?, ?, ?, 1, 1, ?, ?)
                         """, (
                             username,
+                            email,
                             password_hash,
                             now,
                             now,
@@ -1204,12 +1223,16 @@ def index():
 def settings_page():
     user = _current_auth_user()
 
-    message = None
-    error = None
+    general_message = None
+    general_error = None
+    smtp_message = None
+    smtp_error = None
+    security_message = None
+    security_error = None
 
     if request.method == "POST":
         if not _valid_csrf():
-            error = (
+            general_error = (
                 "Security token expired. "
                 "Please try again."
             )
@@ -1260,7 +1283,7 @@ def settings_page():
                     error = "Current password is incorrect."
 
                 elif len(new_password) < 12:
-                    error = (
+                    security_error = (
                         "New password must contain "
                         "at least 12 characters."
                     )
@@ -1384,7 +1407,7 @@ def settings_page():
                     or smtp_port_value < 1
                     or smtp_port_value > 65535
                 ):
-                    error = (
+                    smtp_error = (
                         "Enter a valid SMTP "
                         "host and port."
                     )
@@ -1394,7 +1417,7 @@ def settings_page():
                     "starttls",
                     "ssl",
                 }:
-                    error = (
+                    smtp_error = (
                         "Unsupported SMTP "
                         "security mode."
                     )
@@ -1403,7 +1426,7 @@ def settings_page():
                     not smtp_from_address
                     or "@" not in smtp_from_address
                 ):
-                    error = (
+                    smtp_error = (
                         "Enter a valid sender "
                         "email address."
                     )
@@ -1416,7 +1439,7 @@ def settings_page():
                         "https://"
                     )
                 ):
-                    error = (
+                    smtp_error = (
                         "BEACN public URL must "
                         "begin with http:// or https://."
                     )
@@ -1457,7 +1480,7 @@ def settings_page():
                             smtp_password,
                         )
 
-                    message = (
+                    smtp_message = (
                         "SMTP settings saved."
                     )
 
@@ -1473,23 +1496,40 @@ def settings_page():
                     not destination
                     or "@" not in destination
                 ):
-                    error = (
+                    smtp_error = (
                         "Enter a valid test "
                         "email address."
                     )
 
                 else:
                     try:
+                        smtp = _smtp_settings()
+
                         _send_email(
                             destination,
-                            "BEACN test email",
+                            "BEACN · Email delivery test successful",
                             (
-                                "BEACN SMTP configuration "
-                                "is working correctly."
+                                "BEACN\n"
+                                "Network Intelligence\n\n"
+                                "Email delivery test successful\n\n"
+                                "This message confirms that BEACN can "
+                                "send password recovery and security "
+                                "notification emails through the "
+                                "configured SMTP service.\n\n"
+                                "Instance:\n"
+                                f"{smtp.get('base_url', '')}\n\n"
+                                "Recipient:\n"
+                                f"{destination}\n\n"
+                                "Status:\n"
+                                "SMTP delivery operational\n\n"
+                                "No action is required.\n\n"
+                                "BEACN\n"
+                                "Infrastructure discovery, diagnostics "
+                                "and live device intelligence"
                             ),
                         )
 
-                        message = (
+                        smtp_message = (
                             "Test email sent."
                         )
 
@@ -1498,7 +1538,7 @@ def settings_page():
                             "SMTP test failed."
                         )
 
-                        error = (
+                        smtp_error = (
                             "SMTP test failed: "
                             f"{exc}"
                         )
@@ -1516,7 +1556,7 @@ def settings_page():
                     or "@" not in email
                     or len(email) > 254
                 ):
-                    error = (
+                    security_error = (
                         "Enter a valid recovery "
                         "email address."
                     )
@@ -1535,7 +1575,7 @@ def settings_page():
                         )).fetchone()
 
                     if existing:
-                        error = (
+                        security_error = (
                             "That email address "
                             "is already in use."
                         )
@@ -1561,7 +1601,7 @@ def settings_page():
 
                                 conn.commit()
 
-                        message = (
+                        security_message = (
                             "Recovery email updated."
                         )
 
@@ -1579,7 +1619,7 @@ def settings_page():
                     hours = 0
 
                 if hours < 1 or hours > 168:
-                    error = (
+                    security_error = (
                         "Session timeout must be "
                         "between 1 and 168 hours."
                     )
@@ -1590,7 +1630,7 @@ def settings_page():
                         hours,
                     )
 
-                    message = (
+                    security_message = (
                         "Session timeout updated."
                     )
 
@@ -1639,8 +1679,12 @@ def settings_page():
     return render_template(
         "settings.html",
         user=_current_auth_user(),
-        message=message,
-        error=error,
+        general_message=general_message,
+        general_error=general_error,
+        smtp_message=smtp_message,
+        smtp_error=smtp_error,
+        security_message=security_message,
+        security_error=security_error,
         session_timeout_hours=(
             _session_timeout_hours()
         ),

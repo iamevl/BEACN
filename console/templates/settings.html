@@ -316,23 +316,183 @@
           </div>
         </article>
 
-        <article class="card settings-section">
-          <h3>Notifications</h3>
+                <article class="card settings-section">
+          <h3>Email</h3>
 
-          <div class="settings-provider">
-            <span>Email</span>
-            <span class="badge">Not configured</span>
+          <form
+            method="post"
+            class="settings-form"
+          >
+            <input
+              type="hidden"
+              name="_csrf"
+              value="{{ auth_csrf_token }}"
+            >
+
+            <input
+              type="hidden"
+              name="action"
+              value="smtp_settings"
+            >
+
+            <label>
+              SMTP host
+              <input
+                type="text"
+                name="smtp_host"
+                value="{{ smtp_settings.host }}"
+                placeholder="smtp.example.com"
+                required
+              >
+            </label>
+
+            <label>
+              Port
+              <input
+                type="number"
+                name="smtp_port"
+                min="1"
+                max="65535"
+                value="{{ smtp_settings.port }}"
+                required
+              >
+            </label>
+
+            <label>
+              Security
+              <select
+                name="smtp_security"
+                required
+              >
+                <option value="starttls" {% if smtp_settings.security == 'starttls' %}selected{% endif %}>STARTTLS</option>
+                <option value="ssl" {% if smtp_settings.security == 'ssl' %}selected{% endif %}>SSL/TLS</option>
+                <option value="none" {% if smtp_settings.security == 'none' %}selected{% endif %}>None</option>
+              </select>
+            </label>
+
+            <label>
+              SMTP username
+              <input
+                type="text"
+                name="smtp_username"
+                autocomplete="username"
+                value="{{ smtp_settings.username }}"
+              >
+            </label>
+
+            <label>
+              SMTP password
+              <input
+                type="password"
+                name="smtp_password"
+                autocomplete="new-password"
+                placeholder="{% if smtp_settings.password %}Stored password unchanged{% else %}SMTP password{% endif %}"
+              >
+            </label>
+
+            <label>
+              From address
+              <input
+                type="email"
+                name="smtp_from_address"
+                value="{{ smtp_settings.from_address }}"
+                placeholder="beacn@example.com"
+                required
+              >
+            </label>
+
+            <label>
+              From name
+              <input
+                type="text"
+                name="smtp_from_name"
+                value="{{ smtp_settings.from_name }}"
+                placeholder="BEACN"
+                required
+              >
+            </label>
+
+            <label>
+              Public BEACN URL
+              <input
+                type="url"
+                name="smtp_base_url"
+                value="{{ smtp_settings.base_url }}"
+                placeholder="https://beacn.example.com"
+                required
+              >
+            </label>
+
+            <p class="muted">
+              The public URL is used to build password-reset links.
+              Leave the SMTP password blank when saving to keep the
+              currently stored password.
+            </p>
+
+            <button type="submit">
+              Save email settings
+            </button>
+          </form>
+
+          <form
+            method="post"
+            class="settings-form settings-smtp-test"
+          >
+            <input
+              type="hidden"
+              name="_csrf"
+              value="{{ auth_csrf_token }}"
+            >
+
+            <input
+              type="hidden"
+              name="action"
+              value="smtp_test"
+            >
+
+            <label>
+              Test recipient
+              <input
+                type="email"
+                name="test_email"
+                value="{{ user.email or '' }}"
+                required
+              >
+            </label>
+
+            <button
+              type="submit"
+              class="secondary"
+            >
+              Send test email
+            </button>
+          </form>
+
+          <div class="settings-row">
+            <div>
+              <strong>SMTP status</strong>
+              <small>Password recovery email service</small>
+            </div>
+
+            {% if smtp_configured %}
+              <span class="status-dot good">Configured</span>
+            {% else %}
+              <span class="badge">Not configured</span>
+            {% endif %}
           </div>
 
-          <div class="settings-provider">
-            <span>Teams</span>
-            <span class="badge">Not configured</span>
-          </div>
+          {% if smtp_message %}
+            <div class="settings-message settings-message-success">
+              {{ smtp_message }}
+            </div>
+          {% endif %}
 
-          <div class="settings-provider">
-            <span>Webhook</span>
-            <span class="badge">Not configured</span>
-          </div>
+          {% if smtp_error %}
+            <div class="settings-message settings-message-error">
+              {{ smtp_error }}
+            </div>
+          {% endif %}
+
         </article>
 
       </div>
@@ -355,15 +515,15 @@
         </div>
       </div>
 
-      {% if message %}
+      {% if security_message %}
         <div class="settings-message settings-message-success">
-          {{ message }}
+          {{ security_message }}
         </div>
       {% endif %}
 
-      {% if error %}
+      {% if security_error %}
         <div class="settings-message settings-message-error">
-          {{ error }}
+          {{ security_error }}
         </div>
       {% endif %}
 
@@ -434,6 +594,52 @@
 
 
         <article class="card settings-section">
+
+      <h3>Recovery email</h3>
+
+      <form
+        method="post"
+        class="settings-form"
+      >
+        <input
+          type="hidden"
+          name="_csrf"
+          value="{{ auth_csrf_token }}"
+        >
+
+        <input
+          type="hidden"
+          name="action"
+          value="recovery_email"
+        >
+
+        <label>
+          Recovery email address
+
+          <input
+            type="email"
+            name="recovery_email"
+            autocomplete="email"
+            maxlength="254"
+            value="{{ user.email or '' }}"
+            required
+          >
+        </label>
+
+        <p class="muted">
+          Used for password recovery and security notifications.
+        </p>
+
+        <button type="submit">
+          Save recovery email
+        </button>
+
+      </form>
+
+    </article>
+
+
+    <article class="card settings-section">
 
           <h3>Session policy</h3>
 

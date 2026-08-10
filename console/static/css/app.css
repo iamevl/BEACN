@@ -4906,3 +4906,82 @@ button.relationship-path-device:hover {
   letter-spacing: .06em;
   opacity: .68;
 }
+
+/* SMTP settings */
+.settings-form select {
+  width: 100%;
+  padding: 10px 11px;
+  border: 1px solid var(--border);
+  border-radius: 9px;
+  color: inherit;
+  background: rgba(255,255,255,.025);
+  font: inherit;
+}
+.settings-smtp-test {
+  margin-top: 22px;
+  padding-top: 18px;
+  border-top: 1px solid var(--border);
+}
+
+/* Email integration layout */
+#integrations .settings-grid {
+  align-items: stretch;
+}
+
+#integrations .settings-section:has(input[name="smtp_host"]) {
+  grid-column: 1 / -1;
+}
+
+#integrations .settings-section:has(input[name="smtp_host"]) .settings-form {
+  max-width: 760px;
+}
+
+#integrations .settings-section:has(input[name="smtp_host"]) .settings-smtp-test {
+  max-width: 760px;
+  margin-top: 24px;
+  padding-top: 20px;
+  border-top: 1px solid var(--border);
+}
+
+#integrations .settings-section:has(input[name="smtp_host"]) .settings-row {
+  max-width: 760px;
+  margin-top: 20px;
+}
+
+/* SMTP test and status layout correction */
+#integrations .settings-section:has(input[name="smtp_host"]) {
+  display: block;
+}
+
+#integrations .settings-section:has(input[name="smtp_host"]) > .settings-form,
+#integrations .settings-section:has(input[name="smtp_host"]) > .settings-row {
+  width: 100%;
+  max-width: none;
+}
+
+#integrations .settings-section:has(input[name="smtp_host"]) .settings-smtp-test {
+  display: grid;
+  grid-template-columns: minmax(260px, 1fr) auto;
+  gap: 16px;
+  align-items: end;
+  width: 100%;
+  max-width: none;
+  margin-top: 24px;
+  padding-top: 20px;
+  border-top: 1px solid var(--border);
+}
+
+#integrations .settings-section:has(input[name="smtp_host"]) .settings-smtp-test label {
+  min-width: 0;
+}
+
+#integrations .settings-section:has(input[name="smtp_host"]) .settings-smtp-test button {
+  width: auto;
+  min-width: 170px;
+}
+
+#integrations .settings-section:has(input[name="smtp_host"]) > .settings-row {
+  margin-top: 20px;
+  padding-top: 18px;
+  border-top: 1px solid var(--border);
+}
