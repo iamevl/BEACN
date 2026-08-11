@@ -1,0 +1,1 @@
+"""BEACN API Blueprints."""

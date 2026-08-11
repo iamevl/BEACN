@@ -43,10 +43,6 @@ from beacn.relationships.manager import RelationshipManager
 from beacn.relationships.providers.generic import GenericProvider
 from beacn.relationships.providers.infrastructure import InfrastructureProvider
 from beacn.services.snmp import get_snmp_snapshot
-try:
-    from docker.errors import DockerException
-except ImportError:
-    DockerException = Exception
 
 from beacn.config import (
     AGENT_PORT,
@@ -95,6 +91,9 @@ from beacn.services.telemetry import (
 )
 from beacn.services.docker_monitor import (
     docker_snapshot,
+)
+from beacn.web.api.monitoring import (
+    create_monitoring_blueprint,
 )
 
 from beacn.runtime import (
@@ -186,6 +185,18 @@ app.config.update(
 
 app.permanent_session_lifetime = timedelta(
     hours=8
+)
+
+app.register_blueprint(
+    create_monitoring_blueprint(
+        get_health_summary=lambda: get_health_summary(),
+        docker_snapshot=lambda: docker_snapshot(),
+        fetch_agent_json=lambda target, path: fetch_agent_json(
+            target,
+            path,
+        ),
+        db=lambda: db(),
+    )
 )
 
 def _auth_user_count():
@@ -1864,10 +1875,6 @@ def settings_page():
     )
 
 
-@app.get("/api/health")
-def api_health():
-    return jsonify(get_health_summary())
-
 @app.get("/api/devices")
 def devices():
     """Return canonical Device objects while preserving legacy UI fields."""
@@ -3408,68 +3415,6 @@ def telemetry(target):
         "interval_seconds": METRICS_INTERVAL_SECONDS,
         "points": [dict(row) for row in reversed(rows)],
     })
-
-
-def unavailable_docker_payload(error, source="agent"):
-    return {
-        "available": False,
-        "source": source,
-        "error": "Docker telemetry is currently unavailable.",
-        "engine": {
-            "containers_total": 0,
-            "containers_running": 0,
-            "containers_stopped": 0,
-            "containers_healthy": 0,
-            "containers_unhealthy": 0,
-        },
-        "containers": [],
-        "collected_at": utc_now(),
-    }
-
-
-@app.get("/api/docker")
-def docker_overview():
-    """Legacy local Docker endpoint retained for compatibility."""
-    try:
-        payload = docker_snapshot()
-        payload["source"] = "dashboard-host"
-        return jsonify(payload)
-    except (DockerException, RuntimeError, OSError) as exc:
-        app.logger.exception("Failed to collect local Docker telemetry: %s", exc)
-        return jsonify(unavailable_docker_payload(exc, "dashboard-host"))
-
-
-@app.get("/api/docker/<target>")
-def docker_for_device(target):
-    if not valid_target(target):
-        return jsonify(unavailable_docker_payload("Invalid target.")), 400
-
-    with db() as conn:
-        row = conn.execute(
-            "SELECT agent_available, agent_hostname FROM devices WHERE ip = ?",
-            (target,),
-        ).fetchone()
-
-    if not row:
-        return jsonify(unavailable_docker_payload("Device not found.")), 404
-
-    if not row["agent_available"]:
-        return jsonify(unavailable_docker_payload(
-            "The selected device does not have a BEACN Agent."
-        ))
-
-    payload = fetch_agent_json(target, "/docker")
-    if payload is None:
-        return jsonify(unavailable_docker_payload(
-            f"The agent on {target} did not return Docker telemetry."
-        ))
-
-    payload.setdefault("source", "agent")
-    payload["target_ip"] = target
-    payload["target_hostname"] = row["agent_hostname"] or target
-    return jsonify(payload)
-
-
 
 
 @app.post("/api/scan")
