@@ -21,6 +21,7 @@ _IMPORT_DATA = tempfile.TemporaryDirectory(
 os.environ["DATA_DIR"] = _IMPORT_DATA.name
 os.environ["BEACN_SECRET_KEY"] = "test-only-secret-key"
 os.environ["DOCKER_MONITORING_ENABLED"] = "false"
+os.environ["NETWORK_SUBNET"] = "192.0.2.25/24"
 
 import app as beacn_app  # noqa: E402
 from beacn.database import Database  # noqa: E402

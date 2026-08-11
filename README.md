@@ -144,6 +144,23 @@ git clone https://github.com/iamevl/BEACN.git
 
 cd BEACN
 
+cp .env.example .env
+```
+
+Edit `.env` and set the required `NETWORK_SUBNET` value to the IPv4 CIDR that
+BEACN is authorised to monitor. This setting permits active discovery and
+network probing, so confirm the scope carefully. BEACN will refuse to start if
+the value is missing, blank or invalid.
+
+Validate the resolved configuration before starting BEACN:
+
+```bash
+docker compose config
+```
+
+Review the resolved `NETWORK_SUBNET`, then start the Console:
+
+```bash
 docker compose up -d
 ```
 
@@ -248,6 +265,5 @@ MIT License
 ---
 
 Built with ❤️ for homelabs, labs and small infrastructure teams.
-
 
 

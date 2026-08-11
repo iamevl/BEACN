@@ -1,5 +1,6 @@
 """Central application configuration for BEACN."""
 
+import ipaddress
 import os
 from pathlib import Path
 
@@ -13,10 +14,53 @@ except ImportError:
 
 APP_PORT = int(os.getenv("APP_PORT", "8766"))
 
-NETWORK_SUBNET = os.getenv(
-    "NETWORK_SUBNET",
-    "192.168.1.0/24",
-)
+def _network_subnet():
+    value = os.getenv("NETWORK_SUBNET")
+
+    if value is None or not value.strip():
+        raise RuntimeError(
+            "NETWORK_SUBNET is required. Set it to the IPv4 CIDR "
+            "BEACN is authorised to monitor."
+        )
+
+    if "/" not in value:
+        raise RuntimeError(
+            "NETWORK_SUBNET must be a valid IPv4 CIDR."
+        )
+
+    try:
+        network = ipaddress.ip_network(
+            value.strip(),
+            strict=False,
+        )
+    except ValueError as exc:
+        raise RuntimeError(
+            "NETWORK_SUBNET must be a valid IPv4 CIDR."
+        ) from exc
+
+    if network.version != 4:
+        raise RuntimeError(
+            "NETWORK_SUBNET must be an IPv4 CIDR; IPv6 is not "
+            "currently supported."
+        )
+
+    prohibited_scopes = (
+        ("unspecified", ipaddress.ip_network("0.0.0.0/8")),
+        ("loopback", ipaddress.ip_network("127.0.0.0/8")),
+        ("link-local", ipaddress.ip_network("169.254.0.0/16")),
+        ("multicast", ipaddress.ip_network("224.0.0.0/4")),
+    )
+
+    for label, prohibited in prohibited_scopes:
+        if network.overlaps(prohibited):
+            raise RuntimeError(
+                f"NETWORK_SUBNET must not include {label} address space."
+            )
+
+    return str(network)
+
+
+NETWORK_SUBNET = _network_subnet()
 
 IPERF_PORT = int(os.getenv("IPERF_PORT", "5201"))
 AGENT_PORT = int(os.getenv("AGENT_PORT", "8767"))
