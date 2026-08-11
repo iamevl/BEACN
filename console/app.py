@@ -95,6 +95,7 @@ from beacn.services.docker_monitor import (
 from beacn.web.api.monitoring import (
     create_monitoring_blueprint,
 )
+from beacn.web.api.operations import operations_blueprint
 
 from beacn.runtime import (
     database,
@@ -198,6 +199,7 @@ app.register_blueprint(
         db=lambda: db(),
     )
 )
+app.register_blueprint(operations_blueprint)
 
 def _auth_user_count():
     with db() as conn:
@@ -3415,51 +3417,6 @@ def telemetry(target):
         "interval_seconds": METRICS_INTERVAL_SECONDS,
         "points": [dict(row) for row in reversed(rows)],
     })
-
-
-@app.post("/api/scan")
-def trigger_scan():
-    if scan_state["running"]:
-        return jsonify({"ok": True, "message": "A scan is already running."})
-
-    threading.Thread(target=scan_network, daemon=True).start()
-    return jsonify({"ok": True, "message": "Network scan started."})
-
-
-@app.post("/api/ping")
-def ping():
-    target = (request.json or {}).get("target", "")
-
-    if not valid_target(target):
-        return jsonify({
-            "ok": False,
-            "error": "Target is outside the configured subnet.",
-        }), 400
-
-    safe_target = normalize_target(target)
-
-    return jsonify(run_command(
-        ["ping", "-c", "4", "-W", "2", safe_target],
-        timeout=12,
-    ))
-
-
-@app.post("/api/ports")
-def ports():
-    target = (request.json or {}).get("target", "")
-
-    if not valid_target(target):
-        return jsonify({
-            "ok": False,
-            "error": "Target is outside the configured subnet.",
-        }), 400
-
-    safe_target = normalize_target(target)
-
-    return jsonify(run_command(
-        ["nmap", "-Pn", "-T4", "--top-ports", "100", safe_target],
-        timeout=45,
-    ))
 
 
 @app.post("/api/iperf")
