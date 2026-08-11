@@ -13,7 +13,7 @@ def test_inventory_round_trip():
             initialise_schema(conn)
 
         repository = DeviceRepository(database)
-        device = Device(hostname="test-node", primary_ip="192.168.1.10")
+        device = Device(hostname="test-node", primary_ip="192.0.2.10")
         saved = repository.save(device)
         assert saved.id == device.id
         assert saved.hostname == "test-node"
