@@ -1309,6 +1309,50 @@ def auth_logout():
             400,
         )
 
+    user = _current_auth_user()
+
+    if user:
+        try:
+            with db_write_lock:
+                with db() as conn:
+                    conn.execute(
+                        "BEGIN IMMEDIATE"
+                    )
+
+                    updated = conn.execute("""
+                        UPDATE auth_users
+                        SET
+                            session_version =
+                                session_version + 1,
+                            updated_at = ?
+                        WHERE
+                            id = ?
+                            AND is_enabled = 1
+                    """, (
+                        datetime.now(
+                            timezone.utc
+                        ).isoformat(),
+                        user["id"],
+                    ))
+
+                    if updated.rowcount != 1:
+                        conn.rollback()
+                        raise sqlite3.DatabaseError(
+                            "Session invalidation failed."
+                        )
+
+                    conn.commit()
+
+        except sqlite3.Error:
+            app.logger.exception(
+                "Logout session invalidation failed."
+            )
+
+            return (
+                "Unable to log out. Please try again.",
+                500,
+            )
+
     session.clear()
 
     return redirect(
