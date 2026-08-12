@@ -6,6 +6,11 @@ from typing import Iterable
 from uuid import UUID
 
 from beacn.core import Device, Observation
+from beacn.core.observation import (
+    ATTACHMENT_FIELD,
+    ATTACHMENT_FRESHNESS_SECONDS,
+    select_current_attachment,
+)
 from beacn.database import Database
 
 
@@ -128,3 +133,34 @@ class DeviceRepository:
             item = dict(row)
             item["value"] = json.loads(item.pop("value_json"))
             yield item
+
+    def current_attachment(
+        self,
+        device_id: str,
+        source: str,
+        *,
+        now=None,
+        freshness_seconds: int = ATTACHMENT_FRESHNESS_SECONDS,
+    ) -> dict:
+        with self.database.connect() as conn:
+            rows = conn.execute("""
+                SELECT source, field, value_json, confidence, observed_at
+                FROM observations
+                WHERE device_id = ? AND source = ? AND field = ?
+                ORDER BY observed_at DESC, id DESC
+            """, (device_id, source, ATTACHMENT_FIELD)).fetchall()
+
+        observations = []
+        for row in rows:
+            item = dict(row)
+            try:
+                item["value"] = json.loads(item.pop("value_json"))
+            except (json.JSONDecodeError, TypeError):
+                continue
+            observations.append(item)
+
+        return select_current_attachment(
+            observations,
+            now=now,
+            freshness_seconds=freshness_seconds,
+        )

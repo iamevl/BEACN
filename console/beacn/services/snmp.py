@@ -20,6 +20,8 @@ from pysnmp.hlapi.v3arch.asyncio import (
     walk_cmd,
 )
 
+from beacn.core.observation import normalize_mac
+
 
 SNMP_PORT = 161
 SNMP_TIMEOUT_SECONDS = 1.5
@@ -80,6 +82,14 @@ BRIDGE_FDB_STATUS = {
     3: "learned",
     4: "self",
     5: "management",
+}
+
+BRIDGE_ESSENTIAL_WALKS = {
+    "base_port_ifindex",
+    "interface_names",
+    "fdb_address",
+    "fdb_port",
+    "fdb_status",
 }
 
 
@@ -319,7 +329,13 @@ async def _probe_async(
                 "target": target,
                 "port": int(port),
                 "version": selected_version,
-                "error": str(error_indication),
+                "error": _redact_snmp_error(
+                    error_indication,
+                    community=community,
+                    username=username,
+                    auth_password=auth_password,
+                    priv_password=priv_password,
+                ),
             }
 
         if error_status:
@@ -393,8 +409,12 @@ async def _probe_async(
             "target": target,
             "port": int(port),
             "version": selected_version,
-            "error": (
-                f"{type(exc).__name__}: {exc}"
+            "error": _redact_snmp_error(
+                f"{type(exc).__name__}: {exc}",
+                community=community,
+                username=username,
+                auth_password=auth_password,
+                priv_password=priv_password,
             ),
         }
 
@@ -514,17 +534,14 @@ def _format_mac(value: Any) -> str | None:
         raw = b""
 
     if raw:
-        return ":".join(
-            f"{byte:02x}"
-            for byte in raw
-        )
+        return normalize_mac(raw)
 
     text = value.prettyPrint().strip()
 
     if not text:
         return None
 
-    return text
+    return normalize_mac(text)
 
 
 async def _walk_raw_column(
@@ -681,7 +698,13 @@ async def _interfaces_async(
             columns[field] = values
 
             if error:
-                errors[field] = error
+                errors[field] = _redact_snmp_error(
+                    error,
+                    community=community,
+                    username=username,
+                    auth_password=auth_password,
+                    priv_password=priv_password,
+                )
 
         indexes: set[int] = set()
 
@@ -846,8 +869,12 @@ async def _interfaces_async(
             "target": target,
             "port": int(port),
             "version": _snmp_version(version),
-            "error": (
-                f"{type(exc).__name__}: {exc}"
+            "error": _redact_snmp_error(
+                f"{type(exc).__name__}: {exc}",
+                community=community,
+                username=username,
+                auth_password=auth_password,
+                priv_password=priv_password,
             ),
         }
 
@@ -878,10 +905,120 @@ def _mac_from_oid_suffix(
     ):
         return None
 
-    return ":".join(
-        f"{value:02x}"
-        for value in octets
-    )
+    return normalize_mac(bytes(octets))
+
+
+def _redact_snmp_error(
+    value: Any,
+    *,
+    community: str | None = None,
+    username: str | None = None,
+    auth_password: str | None = None,
+    priv_password: str | None = None,
+) -> str:
+    text = str(value)
+    secrets = {
+        str(item)
+        for item in (
+            community,
+            username,
+            auth_password,
+            priv_password,
+            os.environ.get("BEACN_SNMP_COMMUNITY"),
+            os.environ.get("BEACN_SNMP_USERNAME"),
+            os.environ.get("BEACN_SNMP_AUTH_PASSWORD"),
+            os.environ.get("BEACN_SNMP_PRIV_PASSWORD"),
+        )
+        if item
+    }
+
+    for secret in sorted(secrets, key=len, reverse=True):
+        text = text.replace(secret, "[redacted]")
+
+    return text
+
+
+def _normalise_bridge_entries(
+    *,
+    addresses,
+    ports,
+    statuses,
+    bridge_ports,
+    interface_names,
+    interface_descriptions,
+) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
+    """Combine validated BRIDGE-MIB facts without inferring parents."""
+    entries = []
+    diagnostics = []
+    seen = set()
+
+    for index in sorted(set(addresses) | set(ports) | set(statuses)):
+        mac = normalize_mac(addresses.get(index))
+        bridge_port = ports.get(index)
+        status_code = statuses.get(index)
+        if_index = bridge_ports.get(bridge_port)
+        interface_value = (
+            interface_names.get(if_index)
+            or interface_descriptions.get(if_index)
+            if if_index is not None
+            else None
+        )
+        interface = None
+
+        if interface_value is not None:
+            try:
+                interface = interface_value.prettyPrint().strip() or None
+            except Exception:
+                interface = str(interface_value).strip() or None
+
+        missing = []
+        if not mac:
+            missing.append("mac")
+        if bridge_port is None:
+            missing.append("bridge_port")
+        if if_index is None:
+            missing.append("if_index")
+        if not interface:
+            missing.append("interface")
+
+        if missing:
+            diagnostics.append({
+                "code": "malformed_fdb_row",
+                "index": list(index),
+                "missing": missing,
+            })
+            continue
+
+        identity = (mac, bridge_port, if_index, interface, status_code)
+        if identity in seen:
+            diagnostics.append({
+                "code": "duplicate_fdb_row",
+                "mac": mac,
+                "bridge_port": bridge_port,
+            })
+            continue
+        seen.add(identity)
+
+        status_state = BRIDGE_FDB_STATUS.get(status_code, "unknown")
+        attachment_eligible = status_state == "learned"
+        entries.append({
+            "mac": mac,
+            "bridge_port": bridge_port,
+            "if_index": if_index,
+            "interface": interface,
+            "status": {
+                "code": status_code,
+                "state": status_state,
+            },
+            "attachment_eligible": attachment_eligible,
+            "ineligible_reason": (
+                None
+                if attachment_eligible
+                else f"fdb_status_{status_state}"
+            ),
+        })
+
+    return entries, diagnostics
 
 
 async def _bridge_async(
@@ -902,8 +1039,14 @@ async def _bridge_async(
     if not target:
         return {
             "available": False,
+            "usable": False,
             "target": target,
             "error": "No target supplied.",
+            "walk_errors": {},
+            "failed_essential_walks": sorted(
+                BRIDGE_ESSENTIAL_WALKS
+            ),
+            "row_diagnostics": [],
         }
 
     engine = SnmpEngine()
@@ -1106,86 +1249,6 @@ async def _bridge_async(
                 continue
 
 
-        # ----------------------------------------------------
-        # Combine rows
-        # ----------------------------------------------------
-
-        all_indexes = (
-            set(addresses)
-            | set(ports)
-            | set(statuses)
-        )
-
-        entries = []
-
-        for index in sorted(all_indexes):
-
-            bridge_port = ports.get(index)
-
-            if_index = (
-                bridge_ports.get(
-                    bridge_port
-                )
-                if bridge_port is not None
-                else None
-            )
-
-            name = None
-
-            if if_index is not None:
-                value = interface_names.get(
-                    if_index
-                )
-
-                if value is None:
-                    value = (
-                        interface_descriptions.get(
-                            if_index
-                        )
-                    )
-
-                if value is not None:
-                    try:
-                        name = (
-                            value.prettyPrint()
-                            .strip()
-                        ) or None
-
-                    except Exception:
-                        name = str(value)
-
-
-            status_code = statuses.get(
-                index
-            )
-
-            entries.append({
-                "mac": addresses.get(
-                    index
-                ),
-
-                "bridge_port":
-                    bridge_port,
-
-                "if_index":
-                    if_index,
-
-                "interface":
-                    name,
-
-                "status": {
-                    "code":
-                        status_code,
-
-                    "state":
-                        BRIDGE_FDB_STATUS.get(
-                            status_code,
-                            "unknown",
-                        ),
-                },
-            })
-
-
         errors = {}
 
         for name, error in (
@@ -1211,11 +1274,41 @@ async def _bridge_async(
             ),
         ):
             if error:
-                errors[name] = error
+                errors[name] = _redact_snmp_error(
+                    error,
+                    community=community,
+                    username=username,
+                    auth_password=auth_password,
+                    priv_password=priv_password,
+                )
+
+        failed_essential_walks = sorted(
+            BRIDGE_ESSENTIAL_WALKS
+            & errors.keys()
+        )
+
+        usable = not failed_essential_walks
+        entries = []
+        row_diagnostics = []
+
+        if usable:
+            entries, row_diagnostics = (
+                _normalise_bridge_entries(
+                    addresses=addresses,
+                    ports=ports,
+                    statuses=statuses,
+                    bridge_ports=bridge_ports,
+                    interface_names=interface_names,
+                    interface_descriptions=(
+                        interface_descriptions
+                    ),
+                )
+            )
 
 
         return {
-            "available": True,
+            "available": usable,
+            "usable": usable,
             "target": target,
             "port": int(port),
             "version": selected_version,
@@ -1270,20 +1363,35 @@ async def _bridge_async(
 
             "walk_errors":
                 errors,
+
+            "failed_essential_walks":
+                failed_essential_walks,
+
+            "row_diagnostics":
+                row_diagnostics,
         }
 
     except Exception as exc:
         return {
             "available": False,
+            "usable": False,
             "target": target,
             "port": int(port),
             "version": _snmp_version(
                 version
             ),
-            "error": (
-                f"{type(exc).__name__}: "
-                f"{exc}"
+            "error": _redact_snmp_error(
+                f"{type(exc).__name__}: {exc}",
+                community=community,
+                username=username,
+                auth_password=auth_password,
+                priv_password=priv_password,
             ),
+            "walk_errors": {},
+            "failed_essential_walks": sorted(
+                BRIDGE_ESSENTIAL_WALKS
+            ),
+            "row_diagnostics": [],
         }
 
     finally:
