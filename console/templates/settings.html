@@ -116,7 +116,23 @@
               <small>Interface appearance</small>
             </div>
 
-            <span class="badge">Dark</span>
+            <div class="appearance-control">
+              <select
+                id="appearance"
+                aria-label="Interface appearance"
+              >
+                <option value="dark">Dark</option>
+                <option value="light">Light</option>
+                <option value="system">System</option>
+              </select>
+
+              <small
+                class="appearance-status"
+                id="appearance-status"
+                role="status"
+                aria-live="polite"
+              ></small>
+            </div>
           </div>
         </article>
 

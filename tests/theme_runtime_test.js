@@ -17,7 +17,12 @@ const BOOTSTRAP_SOURCE = BOOTSTRAP_TEMPLATE
   .replace(/^<script>\s*/, '')
   .replace(/\s*<\/script>\s*$/, '');
 
-function environment({stored = null, systemDark = true, storageThrows = false} = {}) {
+function environment({
+  stored = null,
+  systemDark = true,
+  storageThrows = false,
+  settingsControl = false,
+} = {}) {
   const root = {dataset: {}, style: {}};
   const meta = {
     attributes: {},
@@ -27,6 +32,36 @@ function environment({stored = null, systemDark = true, storageThrows = false} =
   };
   const documentListeners = new Map();
   const windowListeners = new Map();
+  const elements = new Map();
+
+  function interactiveElement() {
+    const listeners = new Map();
+    const classes = new Set();
+    return {
+      value: '',
+      textContent: '',
+      classList: {
+        contains: name => classes.has(name),
+        toggle(name, force) {
+          if (force) classes.add(name);
+          else classes.delete(name);
+        },
+      },
+      addEventListener(name, listener) {
+        const registered = listeners.get(name) || [];
+        registered.push(listener);
+        listeners.set(name, registered);
+      },
+      emit(name) {
+        (listeners.get(name) || []).forEach(listener => listener({target: this}));
+      },
+    };
+  }
+
+  if (settingsControl) {
+    elements.set('appearance', interactiveElement());
+    elements.set('appearance-status', interactiveElement());
+  }
   const mediaListeners = [];
   const media = {
     matches: systemDark,
@@ -52,6 +87,9 @@ function environment({stored = null, systemDark = true, storageThrows = false} =
   };
   const document = {
     documentElement: root,
+    getElementById(id) {
+      return elements.get(id) || null;
+    },
     querySelectorAll(selector) {
       return selector === 'meta[name="theme-color"]' ? [meta] : [];
     },
@@ -90,6 +128,7 @@ function environment({stored = null, systemDark = true, storageThrows = false} =
   return {
     context: vm.createContext({window, document, CustomEvent, Set, Object}),
     document,
+    elements,
     localStorage,
     media,
     meta,
@@ -221,4 +260,34 @@ test('controller remains usable when storage is unavailable', () => {
   assert.equal(state.appearance, 'light');
   assert.equal(state.effectiveTheme, 'light');
   assert.equal(env.root.dataset.theme, 'light');
+  assert.equal(state.persisted, false);
+});
+
+test('settings selector initializes, applies, and follows synchronized changes', () => {
+  const env = runController({stored: 'system', systemDark: false, settingsControl: true});
+  const select = env.elements.get('appearance');
+  const status = env.elements.get('appearance-status');
+
+  assert.equal(select.value, 'system');
+  select.value = 'light';
+  select.emit('change');
+  assert.equal(env.window.BEACNTheme.getAppearance(), 'light');
+  assert.equal(env.values.get('beacn.appearance'), 'light');
+  assert.equal(status.textContent, '');
+
+  env.window.emitStorage('dark');
+  assert.equal(select.value, 'dark');
+});
+
+test('settings selector warns when persistence is unavailable', () => {
+  const env = runController({storageThrows: true, settingsControl: true});
+  const select = env.elements.get('appearance');
+  const status = env.elements.get('appearance-status');
+
+  select.value = 'light';
+  select.emit('change');
+
+  assert.equal(env.root.dataset.theme, 'light');
+  assert.match(status.textContent, /could not be saved/);
+  assert.equal(status.classList.contains('warning'), true);
 });

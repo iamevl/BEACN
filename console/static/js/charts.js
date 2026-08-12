@@ -15,6 +15,13 @@
     drawHardwareHistoryCharts();
   }
 
+  function chartThemeColour(name, fallback) {
+    const value = getComputedStyle(document.documentElement)
+      .getPropertyValue(name)
+      .trim();
+    return value || fallback;
+  }
+
   function drawTelemetryChart() {
     const canvas = document.getElementById('telemetryChart');
     if (!canvas) return;
@@ -38,8 +45,8 @@
 
     ctx.clearRect(0, 0, width, height);
     ctx.font = '11px system-ui';
-    ctx.fillStyle = '#95a4c4';
-    ctx.strokeStyle = '#24324e';
+    ctx.fillStyle = chartThemeColour('--beacn-faint-text', '#95a4c4');
+    ctx.strokeStyle = chartThemeColour('--beacn-chart-grid', '#24324e');
     ctx.lineWidth = 1;
 
     [0, 25, 50, 75, 100].forEach(value => {
@@ -178,8 +185,8 @@
 
     ctx.clearRect(0, 0, width, height);
     ctx.font = '11px system-ui';
-    ctx.fillStyle = '#95a4c4';
-    ctx.strokeStyle = '#24324e';
+    ctx.fillStyle = chartThemeColour('--beacn-faint-text', '#95a4c4');
+    ctx.strokeStyle = chartThemeColour('--beacn-chart-grid', '#24324e');
     ctx.lineWidth = 1;
 
     if (!points.length) {
@@ -290,3 +297,7 @@
     });
   }
 
+  document.addEventListener('beacn:themechange', () => {
+    drawTelemetryChart();
+    drawHardwareHistoryCharts();
+  });

@@ -1,13 +1,42 @@
-:root {
+:root,
+:root[data-theme="dark"] {
   color-scheme: dark;
 
-  --bg: #07111f;
-  --panel: rgba(13, 25, 43, .96);
-  --border: rgba(148, 163, 184, .18);
-  --text: #e8eef7;
-  --muted: #8fa3bb;
-  --accent: #22d3ee;
-  --danger: #f87171;
+  --auth-bg: #07111F;
+  --auth-highlight: rgb(34 211 238 / 9%);
+  --auth-panel: rgb(13 25 43 / 96%);
+  --auth-border: rgb(148 163 184 / 18%);
+  --auth-text: #E8EEF7;
+  --auth-muted: #8FA3BB;
+  --auth-accent: #22D3EE;
+  --auth-accent-contrast: #041018;
+  --auth-input: rgb(255 255 255 / 3.5%);
+  --auth-danger: #F87171;
+  --auth-danger-text: #FECACA;
+  --auth-danger-fill: rgb(248 113 113 / 8%);
+  --auth-success-fill: rgb(94 234 212 / 7%);
+  --auth-shadow: 0 24px 80px rgb(0 0 0 / 30%);
+  --auth-focus: rgb(34 211 238 / 25%);
+}
+
+:root[data-theme="light"] {
+  color-scheme: light;
+
+  --auth-bg: #F3F7FA;
+  --auth-highlight: rgb(8 127 117 / 10%);
+  --auth-panel: #FFFFFF;
+  --auth-border: #CBD7DF;
+  --auth-text: #172033;
+  --auth-muted: #4B5D73;
+  --auth-accent: #087F75;
+  --auth-accent-contrast: #FFFFFF;
+  --auth-input: #F8FAFC;
+  --auth-danger: #C62828;
+  --auth-danger-text: #991B1B;
+  --auth-danger-fill: rgb(198 40 40 / 7%);
+  --auth-success-fill: rgb(8 127 117 / 8%);
+  --auth-shadow: 0 24px 80px rgb(30 50 70 / 14%);
+  --auth-focus: rgb(8 127 117 / 24%);
 }
 
 * {
@@ -30,15 +59,15 @@ body {
     "Segoe UI",
     sans-serif;
 
-  color: var(--text);
+  color: var(--auth-text);
 
   background:
     radial-gradient(
       circle at 50% 10%,
-      rgba(34, 211, 238, .09),
+      var(--auth-highlight),
       transparent 34%
     ),
-    var(--bg);
+    var(--auth-bg);
 }
 
 .auth-shell {
@@ -51,11 +80,10 @@ body {
 .auth-card {
   width: min(430px, 100%);
   padding: 30px;
-  border: 1px solid var(--border);
+  border: 1px solid var(--auth-border);
   border-radius: 20px;
-  background: var(--panel);
-  box-shadow:
-    0 24px 80px rgba(0, 0, 0, .3);
+  background: var(--auth-panel);
+  box-shadow: var(--auth-shadow);
 }
 
 .auth-brand {
@@ -75,7 +103,7 @@ body {
 
 .auth-brand span {
   margin-top: 2px;
-  color: var(--muted);
+  color: var(--auth-muted);
   font-size: .8rem;
 }
 
@@ -86,8 +114,8 @@ body {
   place-items: center;
   border-radius: 12px;
   font-weight: 800;
-  color: #041018;
-  background: var(--accent);
+  color: var(--auth-accent-contrast);
+  background: var(--auth-accent);
 }
 
 .auth-heading {
@@ -95,7 +123,7 @@ body {
 }
 
 .auth-heading small {
-  color: var(--accent);
+  color: var(--auth-accent);
   letter-spacing: .12em;
 }
 
@@ -106,17 +134,17 @@ body {
 
 .auth-heading p,
 .auth-help {
-  color: var(--muted);
+  color: var(--auth-muted);
   line-height: 1.55;
 }
 
 .auth-error {
   margin-bottom: 18px;
   padding: 12px 14px;
-  border: 1px solid rgba(248, 113, 113, .35);
+  border: 1px solid color-mix(in srgb, var(--auth-danger) 35%, transparent);
   border-radius: 10px;
-  color: #fecaca;
-  background: rgba(248, 113, 113, .08);
+  color: var(--auth-danger-text);
+  background: var(--auth-danger-fill);
 }
 
 form {
@@ -134,18 +162,18 @@ label {
 input {
   width: 100%;
   padding: 12px 13px;
-  border: 1px solid var(--border);
+  border: 1px solid var(--auth-border);
   border-radius: 10px;
 
-  color: var(--text);
-  background: rgba(255, 255, 255, .035);
+  color: var(--auth-text);
+  background: var(--auth-input);
 
   font: inherit;
 }
 
 input:focus {
-  outline: 2px solid rgba(34, 211, 238, .25);
-  border-color: var(--accent);
+  outline: 2px solid var(--auth-focus);
+  border-color: var(--auth-accent);
 }
 
 button {
@@ -159,8 +187,8 @@ button {
 
   cursor: pointer;
 
-  color: #041018;
-  background: var(--accent);
+  color: var(--auth-accent-contrast);
+  background: var(--auth-accent);
 }
 
 .auth-help {
@@ -171,9 +199,9 @@ button {
 .auth-success {
   margin-bottom: 18px;
   padding: 12px 14px;
-  border: 1px solid rgba(94, 234, 212, .32);
+  border: 1px solid color-mix(in srgb, var(--auth-accent) 32%, transparent);
   border-radius: 10px;
-  background: rgba(94, 234, 212, .07);
+  background: var(--auth-success-fill);
 }
 
 .auth-footer-link {
@@ -182,10 +210,10 @@ button {
 }
 
 .auth-footer-link a {
-  color: var(--muted);
+  color: var(--auth-muted);
   text-decoration: none;
 }
 
 .auth-footer-link a:hover {
-  color: var(--accent);
+  color: var(--auth-accent);
 }

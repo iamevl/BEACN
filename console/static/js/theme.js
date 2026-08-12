@@ -84,10 +84,13 @@
     root.style.colorScheme = effectiveTheme;
     updateThemeColour(effectiveTheme);
 
+    let persisted = true;
+
     if (options.persist !== false) {
       try {
         window.localStorage.setItem(STORAGE_KEY, appearance);
       } catch (_error) {
+        persisted = false;
         // The in-memory preference remains active for this page.
       }
     }
@@ -101,6 +104,7 @@
       preference: appearance,
       theme: effectiveTheme,
       effectiveTheme,
+      persisted,
     };
   }
 
@@ -145,4 +149,29 @@
   });
 
   apply(readStoredPreference(), {persist: false});
+
+  const appearanceSelect = document.getElementById('appearance');
+  const appearanceStatus = document.getElementById('appearance-status');
+
+  if (appearanceSelect) {
+    const synchronizeControl = () => {
+      appearanceSelect.value = appearance;
+    };
+
+    synchronizeControl();
+
+    appearanceSelect.addEventListener('change', () => {
+      const state = apply(appearanceSelect.value);
+      synchronizeControl();
+
+      if (appearanceStatus) {
+        appearanceStatus.textContent = state.persisted
+          ? ''
+          : 'Applied for this page, but could not be saved.';
+        appearanceStatus.classList.toggle('warning', !state.persisted);
+      }
+    });
+
+    document.addEventListener('beacn:themechange', synchronizeControl);
+  }
 })();

@@ -159,6 +159,15 @@ function deviceTypeIsSelected(item) {
 }
 
 
+function deviceTypeThemeColour(name, fallback) {
+    const value = getComputedStyle(document.documentElement)
+        .getPropertyValue(name)
+        .trim();
+
+    return value || fallback;
+}
+
+
 function drawDeviceTypeChart() {
     const canvas =
         document.getElementById('deviceTypeChart');
@@ -198,7 +207,10 @@ function drawDeviceTypeChart() {
     deviceTypeChartSegments = [];
 
     if (!total) {
-        context.fillStyle = '#95a4c4';
+        context.fillStyle = deviceTypeThemeColour(
+            '--beacn-faint-text',
+            '#95a4c4'
+        );
         context.font = '14px system-ui';
         context.textAlign = 'center';
 
@@ -269,7 +281,10 @@ function drawDeviceTypeChart() {
         context.fill();
 
         if (selected) {
-            context.strokeStyle = '#f8fafc';
+            context.strokeStyle = deviceTypeThemeColour(
+                '--beacn-primary-text',
+                '#f8fafc'
+            );
             context.lineWidth = 2;
             context.stroke();
         }
@@ -632,6 +647,11 @@ async function refreshDeviceTypes() {
 
 window.addEventListener(
     'resize',
+    drawDeviceTypeChart
+);
+
+document.addEventListener(
+    'beacn:themechange',
     drawDeviceTypeChart
 );
 
