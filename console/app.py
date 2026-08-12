@@ -2327,6 +2327,11 @@ def relationship_intelligence():
         )
 
         relationship_payload.append({
+            "resolved": True,
+
+            "resolution_status":
+                "resolved",
+
             "subject_ref":
                 relationship.subject_ref,
 
@@ -2475,13 +2480,88 @@ def relationship_intelligence():
                 [],
             ).append(diagnostic)
 
-    for item in unresolved:
-        item["resolution_diagnostics"] = (
+    def decorate_unresolved(item):
+        item_diagnostics = (
             diagnostics_by_subject.get(
                 item["ref"],
                 [],
             )
         )
+
+        diagnostic_codes = {
+            diagnostic.get("code")
+            for diagnostic in item_diagnostics
+        }
+
+        if "incomplete_manual" in diagnostic_codes:
+            resolution_status = "invalid_manual"
+        elif "ambiguous_tie" in diagnostic_codes:
+            resolution_status = "ambiguous"
+        elif diagnostic_codes & {
+            "cycle_rejected",
+            "self_parent",
+        }:
+            resolution_status = "graph_rejected"
+        elif "invalid_parent" in diagnostic_codes:
+            resolution_status = (
+                "invalid_manual"
+                if any(
+                    diagnostic.get("provider")
+                    == "manual"
+                    for diagnostic
+                    in item_diagnostics
+                )
+                else "invalid_parent"
+            )
+        else:
+            resolution_status = "no_evidence"
+
+        item["resolved"] = False
+        item["resolution_status"] = (
+            resolution_status
+        )
+        item["resolution_diagnostics"] = (
+            item_diagnostics
+        )
+
+        return item
+
+    unresolved = [
+        decorate_unresolved(item)
+        for item in unresolved
+    ]
+
+    resolved_refs = {
+        item["subject_ref"]
+        for item in relationship_payload
+    }
+
+    unresolved_infrastructure = []
+
+    for infrastructure_item in context["infrastructure"]:
+        subject_ref = infrastructure_item.get("ref")
+        parent_ref = infrastructure_item.get("parent_ref")
+
+        if (
+            not subject_ref
+            or not parent_ref
+            or subject_ref in resolved_refs
+        ):
+            continue
+
+        item = object_payload(subject_ref)
+        item["intended_parent_ref"] = parent_ref
+        unresolved_infrastructure.append(
+            decorate_unresolved(item)
+        )
+
+    unresolved_relationships = sorted(
+        [
+            *unresolved,
+            *unresolved_infrastructure,
+        ],
+        key=lambda item: item["ref"],
+    )
 
     unresolved_endpoints = [
         item
@@ -2643,6 +2723,9 @@ def relationship_intelligence():
 
         "unresolved":
             unresolved,
+
+        "unresolved_relationships":
+            unresolved_relationships,
 
         "diagnostics":
             manager.diagnostics,

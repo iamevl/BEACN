@@ -113,7 +113,8 @@ def test_relationships_api_contract_and_unresolved_handling(app):
     payload = response.get_json()
     assert set(payload) == {
         "ok", "engine", "summary", "providers",
-        "relationships", "unresolved", "diagnostics",
+        "relationships", "unresolved",
+        "unresolved_relationships", "diagnostics",
     }
     assert payload["ok"] is True
     assert payload["engine"] == {
@@ -168,6 +169,8 @@ def test_relationships_api_contract_and_unresolved_handling(app):
         if item["subject_ref"] == "device:192.0.2.20"
     )
     assert nas["parent_ref"] == "infra:switch"
+    assert nas["resolved"] is True
+    assert nas["resolution_status"] == "resolved"
     assert nas["subject_id"] == "id-192.0.2.20"
     assert nas["subject_kind"] == "device"
     assert nas["parent_id"] == "switch"
@@ -204,8 +207,11 @@ def test_relationships_api_contract_and_unresolved_handling(app):
         "is_online": True,
         "agent_available": False,
         "presentation_role": "endpoint",
+        "resolved": False,
+        "resolution_status": "no_evidence",
         "resolution_diagnostics": [],
     }]
+    assert payload["unresolved_relationships"] == payload["unresolved"]
     assert payload["diagnostics"] == []
 
 
@@ -219,6 +225,30 @@ def test_missing_relationship_parent_is_rejected_with_diagnostics(app):
         "/api/relationships"
     ).get_json()
     assert payload["relationships"] == []
+    assert payload["unresolved"] == []
+    assert payload["unresolved_relationships"] == [{
+        "ref": "infra:orphan",
+        "id": "orphan",
+        "object_kind": "infrastructure",
+        "name": "Orphan",
+        "ip": None,
+        "infrastructure_type": "switch",
+        "manufacturer": "",
+        "model": "",
+        "managed": None,
+        "location": None,
+        "presentation_role": "infrastructure",
+        "intended_parent_ref": "infra:deleted",
+        "resolved": False,
+        "resolution_status": "invalid_parent",
+        "resolution_diagnostics": [{
+            "subject_ref": "infra:orphan",
+            "code": "invalid_parent",
+            "message": "Relationship parent is not present in the inventory.",
+            "parent_ref": "infra:deleted",
+            "provider": "infrastructure",
+        }],
+    }]
     assert payload["diagnostics"] == [{
         "subject_ref": "infra:orphan",
         "code": "invalid_parent",
@@ -296,7 +326,86 @@ def test_incomplete_manual_relationship_is_unresolved_and_diagnostic(app):
     ).get_json()
 
     assert payload["relationships"] == []
+    assert payload["unresolved"][0]["resolved"] is False
+    assert payload["unresolved"][0][
+        "resolution_status"
+    ] == "invalid_manual"
     assert payload["unresolved"][0]["resolution_diagnostics"][0][
         "code"
     ] == "incomplete_manual"
     assert payload["diagnostics"][0]["code"] == "incomplete_manual"
+
+
+def test_manual_self_parent_has_graph_rejected_status(app):
+    insert_device(
+        "192.0.2.60",
+        "phone",
+        connection_source="manual",
+        connection_method="wired",
+        connection_parent_ref="device:192.0.2.60",
+    )
+
+    payload = authenticated_client(app).get(
+        "/api/relationships"
+    ).get_json()
+
+    assert payload["relationships"] == []
+    assert payload["unresolved"][0][
+        "resolution_status"
+    ] == "graph_rejected"
+    assert payload["unresolved"][0][
+        "resolution_diagnostics"
+    ][0]["code"] == "self_parent"
+
+
+def test_manual_missing_parent_has_invalid_manual_status(app):
+    insert_device(
+        "192.0.2.61",
+        "phone",
+        connection_source="manual",
+        connection_method="wireless",
+        connection_parent_ref="infra:removed",
+    )
+
+    payload = authenticated_client(app).get(
+        "/api/relationships"
+    ).get_json()
+
+    assert payload["relationships"] == []
+    assert payload["unresolved"][0][
+        "resolution_status"
+    ] == "invalid_manual"
+    assert payload["unresolved"][0][
+        "resolution_diagnostics"
+    ][0]["code"] == "invalid_parent"
+
+
+def test_manual_cycle_has_graph_rejected_status_for_each_subject(app):
+    insert_device(
+        "192.0.2.70",
+        "switch",
+        connection_source="manual",
+        connection_method="wired",
+        connection_parent_ref="device:192.0.2.71",
+    )
+    insert_device(
+        "192.0.2.71",
+        "switch",
+        connection_source="manual",
+        connection_method="wired",
+        connection_parent_ref="device:192.0.2.70",
+    )
+
+    payload = authenticated_client(app).get(
+        "/api/relationships"
+    ).get_json()
+
+    assert payload["relationships"] == []
+    assert {
+        item["resolution_status"]
+        for item in payload["unresolved"]
+    } == {"graph_rejected"}
+    assert {
+        item["resolution_diagnostics"][0]["code"]
+        for item in payload["unresolved"]
+    } == {"cycle_rejected"}
