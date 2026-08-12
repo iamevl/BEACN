@@ -11,6 +11,8 @@
 
   <title>Settings · BEACN</title>
 
+  {% include '_theme_bootstrap.html' %}
+
   <link
     rel="stylesheet"
     href="{{ url_for('static', filename='branding/css/beacn-tokens.css') }}?v={{ app_version }}"
@@ -1018,6 +1020,8 @@
     </section>
 
   </main>
+
+  <script src="{{ url_for('static', filename='js/theme.js') }}?v={{ app_version }}"></script>
 
 </body>
 </html>

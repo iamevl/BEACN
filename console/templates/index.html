@@ -11,6 +11,8 @@
     content="#0F172A"
   >
 
+  {% include '_theme_bootstrap.html' %}
+
   <link
     rel="icon"
     href="{{ url_for('static', filename='branding/favicons/favicon.ico') }}"
@@ -780,6 +782,7 @@
 
 </main>
 
+  <script src="{{ url_for('static', filename='js/theme.js') }}?v={{ app_version }}"></script>
   <script src="{{ url_for('static', filename='js/core.js') }}?v={{ app_version }}"></script>
   <script src="{{ url_for('static', filename='js/device-profile.js') }}?v={{ app_version }}"></script>
   <script src="{{ url_for('static', filename='js/snmp-ui.js') }}?v={{ app_version }}"></script>

@@ -1,0 +1,36 @@
+<script>
+  (() => {
+    const storageKey = 'beacn.appearance';
+    const allowed = new Set(['dark', 'light', 'system']);
+    let appearance = 'dark';
+    let theme = 'dark';
+
+    try {
+      const stored = window.localStorage.getItem(storageKey);
+      appearance = allowed.has(stored) ? stored : 'dark';
+
+      if (appearance === 'system') {
+        theme = window.matchMedia('(prefers-color-scheme: dark)').matches
+          ? 'dark'
+          : 'light';
+      } else {
+        theme = appearance;
+      }
+    } catch (_error) {
+      appearance = 'dark';
+      theme = 'dark';
+    }
+
+    const root = document.documentElement;
+    root.dataset.appearance = appearance;
+    root.dataset.theme = theme;
+    root.style.colorScheme = theme;
+
+    document.querySelectorAll('meta[name="theme-color"]').forEach(meta => {
+      meta.setAttribute(
+        'content',
+        theme === 'light' ? '#F8FAFC' : '#0F172A'
+      );
+    });
+  })();
+</script>
