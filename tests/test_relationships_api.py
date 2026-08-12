@@ -23,17 +23,25 @@ def insert_device(
     *,
     display_name=None,
     agent_available=0,
+    connection_source=None,
+    connection_method=None,
+    connection_parent_ref=None,
+    connection_parent_ip=None,
 ):
     now = datetime.now(timezone.utc).isoformat()
     with beacn_app.db() as conn:
         conn.execute("""
             INSERT INTO devices (
                 id, ip, hostname, display_name, is_online,
-                agent_available, device_type, first_seen, last_seen
-            ) VALUES (?, ?, ?, ?, 1, ?, ?, ?, ?)
+                agent_available, device_type, first_seen, last_seen,
+                connection_source, connection_method,
+                connection_parent_ref, connection_parent_ip
+            ) VALUES (?, ?, ?, ?, 1, ?, ?, ?, ?, ?, ?, ?, ?)
         """, (
             f"id-{ip}", ip, f"host-{ip}", display_name,
             agent_available, device_type, now, now,
+            connection_source, connection_method,
+            connection_parent_ref, connection_parent_ip,
         ))
         conn.commit()
 
@@ -105,7 +113,7 @@ def test_relationships_api_contract_and_unresolved_handling(app):
     payload = response.get_json()
     assert set(payload) == {
         "ok", "engine", "summary", "providers",
-        "relationships", "unresolved",
+        "relationships", "unresolved", "diagnostics",
     }
     assert payload["ok"] is True
     assert payload["engine"] == {
@@ -122,7 +130,7 @@ def test_relationships_api_contract_and_unresolved_handling(app):
         "unresolved_access_points": 0,
         "core_services_without_parent": 0,
         "infrastructure_objects": 3,
-        "providers": 2,
+        "providers": 3,
         "evidence_items": 4,
     }
     assert payload["providers"] == [
@@ -132,6 +140,13 @@ def test_relationships_api_contract_and_unresolved_handling(app):
             "status": "healthy",
             "evidence_count": 2,
             "relationship_count": 2,
+        },
+        {
+            "name": "manual",
+            "label": "Manual override",
+            "status": "healthy",
+            "evidence_count": 0,
+            "relationship_count": 0,
         },
         {
             "name": "generic",
@@ -153,7 +168,12 @@ def test_relationships_api_contract_and_unresolved_handling(app):
         if item["subject_ref"] == "device:192.0.2.20"
     )
     assert nas["parent_ref"] == "infra:switch"
+    assert nas["subject_id"] == "id-192.0.2.20"
+    assert nas["subject_kind"] == "device"
+    assert nas["parent_id"] == "switch"
+    assert nas["parent_kind"] == "infrastructure"
     assert nas["subject"]["ip"] == "192.0.2.20"
+    assert nas["subject"]["id"] == "id-192.0.2.20"
     assert nas["subject"]["object_kind"] == "device"
     assert nas["parent"]["object_kind"] == "infrastructure"
     assert nas["transport"] == "wired"
@@ -174,6 +194,7 @@ def test_relationships_api_contract_and_unresolved_handling(app):
     }]
     assert payload["unresolved"] == [{
         "ref": "device:192.0.2.30",
+        "id": "id-192.0.2.30",
         "object_kind": "device",
         "name": "Example Handset",
         "ip": "192.0.2.30",
@@ -183,10 +204,12 @@ def test_relationships_api_contract_and_unresolved_handling(app):
         "is_online": True,
         "agent_available": False,
         "presentation_role": "endpoint",
+        "resolution_diagnostics": [],
     }]
+    assert payload["diagnostics"] == []
 
 
-def test_missing_relationship_parent_is_represented_as_unknown(app):
+def test_missing_relationship_parent_is_rejected_with_diagnostics(app):
     insert_infrastructure(
         "orphan", "Orphan", "switch",
         parent_ref="infra:deleted",
@@ -195,14 +218,85 @@ def test_missing_relationship_parent_is_represented_as_unknown(app):
     payload = authenticated_client(app).get(
         "/api/relationships"
     ).get_json()
-    relationship = payload["relationships"][0]
+    assert payload["relationships"] == []
+    assert payload["diagnostics"] == [{
+        "subject_ref": "infra:orphan",
+        "code": "invalid_parent",
+        "message": "Relationship parent is not present in the inventory.",
+        "parent_ref": "infra:deleted",
+        "provider": "infrastructure",
+    }]
 
-    assert relationship["subject_ref"] == "infra:orphan"
-    assert relationship["parent_ref"] == "infra:deleted"
-    assert relationship["parent"] == {
-        "ref": "infra:deleted",
-        "object_kind": "unknown",
-        "name": "infra:deleted",
-        "presentation_role": "unknown",
-    }
-    assert relationship["confidence"] == 100
+
+def test_manual_relationship_and_canonical_identity_contract(app):
+    insert_device("192.0.2.1", "router")
+    insert_device(
+        "192.0.2.40",
+        "nas",
+        connection_source="manual",
+        connection_method="wired",
+        connection_parent_ref="infra:switch",
+    )
+    insert_infrastructure(
+        "switch", "Example Switch", "switch",
+        parent_ref="device:192.0.2.1",
+    )
+
+    payload = authenticated_client(app).get(
+        "/api/relationships"
+    ).get_json()
+    manual = next(
+        item for item in payload["relationships"]
+        if item["subject_ref"] == "device:192.0.2.40"
+    )
+
+    assert manual["provider"] == "manual"
+    assert manual["confidence"] == 100
+    assert manual["transport"] == "wired"
+    assert manual["subject_id"] == "id-192.0.2.40"
+    assert manual["subject_kind"] == "device"
+    assert manual["parent_id"] == "switch"
+    assert manual["parent_kind"] == "infrastructure"
+    assert manual["placement"] == "manual"
+
+
+def test_device_parent_exposes_canonical_parent_identity(app):
+    insert_device("192.0.2.1", "router")
+    insert_device(
+        "192.0.2.41",
+        "phone",
+        connection_source="manual",
+        connection_method="wireless",
+        connection_parent_ref="device:192.0.2.1",
+    )
+
+    payload = authenticated_client(app).get(
+        "/api/relationships"
+    ).get_json()
+    manual = next(
+        item for item in payload["relationships"]
+        if item["subject_ref"] == "device:192.0.2.41"
+    )
+
+    assert manual["parent_ref"] == "device:192.0.2.1"
+    assert manual["parent_id"] == "id-192.0.2.1"
+    assert manual["parent_kind"] == "device"
+
+
+def test_incomplete_manual_relationship_is_unresolved_and_diagnostic(app):
+    insert_device(
+        "192.0.2.50",
+        "nas",
+        connection_source="manual",
+        connection_method="automatic",
+    )
+
+    payload = authenticated_client(app).get(
+        "/api/relationships"
+    ).get_json()
+
+    assert payload["relationships"] == []
+    assert payload["unresolved"][0]["resolution_diagnostics"][0][
+        "code"
+    ] == "incomplete_manual"
+    assert payload["diagnostics"][0]["code"] == "incomplete_manual"

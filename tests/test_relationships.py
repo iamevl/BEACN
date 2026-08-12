@@ -3,6 +3,7 @@ from beacn.relationships.manager import RelationshipManager
 from beacn.relationships.provider import RelationshipProvider
 from beacn.relationships.providers.generic import GenericProvider
 from beacn.relationships.providers.infrastructure import InfrastructureProvider
+from beacn.relationships.providers.manual import ManualProvider
 
 
 ROUTER = {
@@ -188,7 +189,13 @@ def test_highest_confidence_wins_and_losing_candidates_are_retained():
         "wired", "high_candidate",
     )]))
 
-    relationship = manager.evaluate({})[0]
+    relationship = manager.evaluate({
+        "devices": [{"ip": "192.0.2.60"}],
+        "infrastructure": [
+            {"ref": "infra:low"},
+            {"ref": "infra:high"},
+        ],
+    })[0]
 
     assert relationship.parent_ref == "infra:high"
     assert [item.confidence for item in relationship.evidence] == [90, 40]
@@ -198,7 +205,7 @@ def test_highest_confidence_wins_and_losing_candidates_are_retained():
     ]
 
 
-def test_equal_confidence_preserves_provider_registration_order():
+def test_equal_confidence_different_parents_remains_ambiguous():
     first = Evidence(
         "device:192.0.2.61", "infra:first", "first", 80,
         "wired", "first_candidate",
@@ -211,10 +218,51 @@ def test_equal_confidence_preserves_provider_registration_order():
     manager.register(StaticProvider("first", [first]))
     manager.register(StaticProvider("second", [second]))
 
-    relationship = manager.evaluate({})[0]
+    context = {
+        "devices": [{"ip": "192.0.2.61"}],
+        "infrastructure": [
+            {"ref": "infra:first"},
+            {"ref": "infra:second"},
+        ],
+    }
 
-    assert relationship.parent_ref == "infra:first"
-    assert relationship.evidence == [first, second]
+    assert manager.evaluate(context) == []
+    assert manager.diagnostics == [{
+        "subject_ref": "device:192.0.2.61",
+        "code": "ambiguous_tie",
+        "message": "Equal-authority relationship candidates disagree on the parent.",
+        "parent_refs": ["infra:first", "infra:second"],
+        "providers": ["first", "second"],
+    }]
+
+    reversed_manager = RelationshipManager()
+    reversed_manager.register(StaticProvider("second", [second]))
+    reversed_manager.register(StaticProvider("first", [first]))
+    assert reversed_manager.evaluate(context) == []
+    assert reversed_manager.diagnostics == manager.diagnostics
+
+
+def test_equal_candidates_for_same_parent_use_stable_provider_key():
+    subject = "device:192.0.2.62"
+    first = Evidence(
+        subject, "infra:parent", "z-provider", 80,
+        "wired", "candidate",
+    )
+    second = Evidence(
+        subject, "infra:parent", "a-provider", 80,
+        "wired", "candidate",
+    )
+    context = {
+        "devices": [{"ip": "192.0.2.62"}],
+        "infrastructure": [{"ref": "infra:parent"}],
+    }
+
+    for evidence in ((first, second), (second, first)):
+        manager = RelationshipManager()
+        manager.register(StaticProvider("one", [evidence[0]]))
+        manager.register(StaticProvider("two", [evidence[1]]))
+        relationship = manager.evaluate(context)[0]
+        assert relationship.provider == "a-provider"
 
 
 def test_relationship_output_is_sorted_by_subject_reference():
@@ -225,13 +273,21 @@ def test_relationship_output_is_sorted_by_subject_reference():
     manager = RelationshipManager()
     manager.register(StaticProvider("static", evidence))
 
-    assert [item.subject_ref for item in manager.evaluate({})] == [
+    context = {
+        "devices": [
+            {"ip": "192.0.2.9"},
+            {"ip": "192.0.2.2"},
+        ],
+        "infrastructure": [{"ref": "infra:x"}],
+    }
+
+    assert [item.subject_ref for item in manager.evaluate(context)] == [
         "device:192.0.2.2",
         "device:192.0.2.9",
     ]
 
 
-def test_current_provider_emits_missing_parent_and_cycles_without_validation():
+def test_missing_parent_and_infrastructure_cycles_are_rejected():
     infrastructure = [
         {
             "ref": "infra:missing-child",
@@ -253,12 +309,206 @@ def test_current_provider_emits_missing_parent_and_cycles_without_validation():
         },
     ]
 
-    relationships = InfrastructureProvider().collect({
+    manager = RelationshipManager()
+    manager.register(InfrastructureProvider())
+    relationships = manager.evaluate({
+        "devices": [],
         "infrastructure": infrastructure,
     })
 
-    assert [(item.subject_ref, item.parent_ref) for item in relationships] == [
-        ("infra:missing-child", "infra:deleted"),
-        ("infra:a", "infra:b"),
-        ("infra:b", "infra:a"),
+    assert relationships == []
+    assert {
+        (item["subject_ref"], item["code"])
+        for item in manager.diagnostics
+    } == {
+        ("infra:missing-child", "invalid_parent"),
+        ("infra:a", "cycle_rejected"),
+        ("infra:b", "cycle_rejected"),
+    }
+
+
+def test_self_parent_is_rejected():
+    manager = RelationshipManager()
+    manager.register(StaticProvider("self", [Evidence(
+        "device:192.0.2.70", "device:192.0.2.70", "self", 100,
+        "wired", "self",
+    )]))
+
+    assert manager.evaluate({
+        "devices": [{"ip": "192.0.2.70"}],
+        "infrastructure": [],
+    }) == []
+    assert manager.diagnostics[0]["code"] == "self_parent"
+
+
+def test_multi_node_cycle_rejects_every_participating_edge():
+    evidence = [
+        Evidence("infra:a", "infra:b", "static", 100, "wired", "configured"),
+        Evidence("infra:b", "infra:c", "static", 100, "wired", "configured"),
+        Evidence("infra:c", "infra:a", "static", 100, "wired", "configured"),
+        Evidence("infra:child", "infra:a", "static", 100, "wired", "configured"),
     ]
+    manager = RelationshipManager()
+    manager.register(StaticProvider("static", evidence))
+    relationships = manager.evaluate({
+        "devices": [],
+        "infrastructure": [
+            {"ref": ref}
+            for ref in ("infra:a", "infra:b", "infra:c", "infra:child")
+        ],
+    })
+
+    assert [(item.subject_ref, item.parent_ref) for item in relationships] == [
+        ("infra:child", "infra:a"),
+    ]
+    assert {
+        item["subject_ref"] for item in manager.diagnostics
+        if item["code"] == "cycle_rejected"
+    } == {"infra:a", "infra:b", "infra:c"}
+
+
+def manual_context(device, *extra_devices):
+    return {
+        "devices": [device, *extra_devices],
+        "infrastructure": [{"ref": "infra:parent"}],
+    }
+
+
+def test_manual_device_to_infrastructure_is_authoritative():
+    device = {
+        "ip": "192.0.2.80",
+        "device_type": "nas",
+        "connection_source": "manual",
+        "connection_method": "wireless",
+        "connection_parent_ref": "infra:parent",
+    }
+    manager = RelationshipManager()
+    manager.register(GenericProvider())
+    manager.register(ManualProvider())
+
+    relationship = manager.evaluate(manual_context(device))[0]
+
+    assert relationship.parent_ref == "infra:parent"
+    assert relationship.provider == "manual"
+    assert relationship.confidence == 100
+    assert relationship.transport == "wireless"
+    assert relationship.reason == "manual_override"
+
+
+def test_manual_relationship_blocks_automatic_fallback():
+    device = {
+        "ip": "192.0.2.87",
+        "connection_source": "manual",
+        "connection_method": "wired",
+        "connection_parent_ref": "infra:deleted",
+    }
+    manager = RelationshipManager()
+    manager.register(ManualProvider())
+    manager.register(StaticProvider("automatic", [Evidence(
+        "device:192.0.2.87", "infra:parent", "automatic", 90,
+        "wired", "automatic_candidate",
+    )]))
+
+    assert manager.evaluate(manual_context(device)) == []
+    assert {
+        item["code"] for item in manager.diagnostics
+    } == {
+        "invalid_parent",
+        "manual_fallback_blocked",
+    }
+
+
+def test_invalid_high_confidence_parent_allows_valid_lower_candidate():
+    subject = "device:192.0.2.88"
+    manager = RelationshipManager()
+    manager.register(StaticProvider("candidates", [
+        Evidence(
+            subject, "infra:deleted", "invalid", 100,
+            "wired", "invalid_candidate",
+        ),
+        Evidence(
+            subject, "infra:parent", "valid", 60,
+            "wired", "valid_candidate",
+        ),
+    ]))
+
+    relationship = manager.evaluate({
+        "devices": [{"ip": "192.0.2.88"}],
+        "infrastructure": [{"ref": "infra:parent"}],
+    })[0]
+
+    assert relationship.parent_ref == "infra:parent"
+    assert relationship.confidence == 60
+    assert manager.diagnostics[0]["code"] == "invalid_parent"
+
+
+def test_manual_device_parent_and_legacy_ip_are_supported():
+    parent = {"ip": "192.0.2.81", "device_type": "router"}
+    explicit = {
+        "ip": "192.0.2.82",
+        "connection_source": "manual",
+        "connection_method": "wired",
+        "connection_parent_ref": "device:192.0.2.81",
+        "connection_parent_ip": "192.0.2.99",
+    }
+    legacy = {
+        "ip": "192.0.2.83",
+        "connection_source": "manual",
+        "connection_method": "wired",
+        "connection_parent_ip": "192.0.2.81",
+    }
+    manager = RelationshipManager()
+    manager.register(ManualProvider())
+    relationships = manager.evaluate({
+        "devices": [parent, explicit, legacy],
+        "infrastructure": [],
+    })
+
+    assert {
+        item.subject_ref: item.parent_ref
+        for item in relationships
+    } == {
+        "device:192.0.2.82": "device:192.0.2.81",
+        "device:192.0.2.83": "device:192.0.2.81",
+    }
+
+
+def test_invalid_or_incomplete_manual_data_blocks_generic_fallback():
+    cases = [
+        {
+            "ip": "192.0.2.84",
+            "device_type": "nas",
+            "connection_source": "manual",
+            "connection_method": "bluetooth",
+            "connection_parent_ref": "infra:parent",
+        },
+        {
+            "ip": "192.0.2.85",
+            "device_type": "nas",
+            "connection_source": "manual",
+            "connection_method": "wired",
+        },
+        {
+            "ip": "192.0.2.86",
+            "device_type": "nas",
+            "connection_source": "manual",
+            "connection_method": "wired",
+            "connection_parent_ref": "infra:deleted",
+        },
+    ]
+    manager = RelationshipManager()
+    manager.register(ManualProvider())
+    manager.register(GenericProvider())
+
+    assert manager.evaluate({
+        "devices": [ROUTER, *cases],
+        "infrastructure": [SWITCH, {"ref": "infra:parent"}],
+    }) == []
+    assert {
+        (item["subject_ref"], item["code"])
+        for item in manager.diagnostics
+    } == {
+        ("device:192.0.2.84", "incomplete_manual"),
+        ("device:192.0.2.85", "incomplete_manual"),
+        ("device:192.0.2.86", "invalid_parent"),
+    }

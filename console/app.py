@@ -42,6 +42,7 @@ from beacn.services.health import get_health_summary
 from beacn.relationships.manager import RelationshipManager
 from beacn.relationships.providers.generic import GenericProvider
 from beacn.relationships.providers.infrastructure import InfrastructureProvider
+from beacn.relationships.providers.manual import ManualProvider
 from beacn.services.snmp import get_snmp_snapshot
 
 from beacn.config import (
@@ -2082,6 +2083,10 @@ def relationship_intelligence():
     )
 
     manager.register(
+        ManualProvider()
+    )
+
+    manager.register(
         GenericProvider()
     )
 
@@ -2177,6 +2182,7 @@ def relationship_intelligence():
 
         object_index[ref] = {
             "ref": ref,
+            "id": device.get("id"),
             "object_kind": "device",
             "name": name,
             "ip": ip,
@@ -2243,6 +2249,7 @@ def relationship_intelligence():
 
         object_index[ref] = {
             "ref": ref,
+            "id": item.get("id"),
             "object_kind":
                 "infrastructure",
             "name":
@@ -2328,6 +2335,30 @@ def relationship_intelligence():
 
             "subject": subject,
             "parent": parent,
+
+            "subject_id": (
+                subject.get("id")
+                if subject
+                else None
+            ),
+
+            "subject_kind": (
+                subject.get("object_kind")
+                if subject
+                else "unknown"
+            ),
+
+            "parent_id": (
+                parent.get("id")
+                if parent
+                else None
+            ),
+
+            "parent_kind": (
+                parent.get("object_kind")
+                if parent
+                else "unknown"
+            ),
 
             "transport":
                 relationship.transport,
@@ -2432,6 +2463,25 @@ def relationship_intelligence():
         object_payload(ref)
         for ref in unresolved_refs
     ]
+
+    diagnostics_by_subject = {}
+
+    for diagnostic in manager.diagnostics:
+        subject_ref = diagnostic.get("subject_ref")
+
+        if subject_ref:
+            diagnostics_by_subject.setdefault(
+                subject_ref,
+                [],
+            ).append(diagnostic)
+
+    for item in unresolved:
+        item["resolution_diagnostics"] = (
+            diagnostics_by_subject.get(
+                item["ref"],
+                [],
+            )
+        )
 
     unresolved_endpoints = [
         item
@@ -2593,6 +2643,9 @@ def relationship_intelligence():
 
         "unresolved":
             unresolved,
+
+        "diagnostics":
+            manager.diagnostics,
     })
 
 

@@ -46,6 +46,13 @@ class GenericProvider(RelationshipProvider):
     @staticmethod
     def _has_explicit_parent(device):
         return bool(
+            str(
+                device.get(
+                    "connection_source",
+                    "",
+                )
+            ).strip().lower() == "manual"
+            or
             device.get("connection_parent_ref")
             or device.get(
                 "connection_parent_ip"
