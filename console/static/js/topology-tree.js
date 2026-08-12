@@ -2,9 +2,9 @@
 
 /*
  * ------------------------------------------------------------------
- * BEACN Relationship / Topology Tree Engine v2
+ * BEACN Canonical Relationship Topology Tree
  *
- * Manual configuration is authoritative.
+ * Relationship truth is supplied by /api/relationships.
  *
  * Nodes may represent:
  *
@@ -13,26 +13,10 @@
  *
  * Infrastructure objects do not require an IP address.
  *
- * Automatic inference remains read-only and must never override
- * explicit user relationships.
+ * This module creates presentation nodes and applies canonical
+ * winners. It performs no evidence evaluation or parent inference.
  * ------------------------------------------------------------------
  */
-
-
-const TOPOLOGY_RELATIONSHIP_CONFIDENCE = {
-    manual: 100,
-    agent: 100,
-    learned: 85,
-    inferred: 60,
-    unknown: 0
-};
-
-
-function topologyTreeNormalise(value) {
-    return String(value || "")
-        .trim()
-        .toLowerCase();
-}
 
 
 function topologyTreeDeviceName(device) {
@@ -46,37 +30,24 @@ function topologyTreeDeviceName(device) {
 }
 
 
-function topologyTreeConnectionMethod(subject) {
-    const method = topologyTreeNormalise(
-        subject?.connection_method
-    );
-
-    if (
-        method === "wired" ||
-        method === "wireless" ||
-        method === "virtual"
-    ) {
-        return method;
-    }
-
-    return null;
-}
-
-
-function topologyTreeIsManual(device) {
-    return (
-        topologyTreeNormalise(
-            device?.connection_source
-        ) === "manual"
-    );
-}
-
-
 function topologyTreeDeviceRef(device) {
     const ip = String(device?.ip || "").trim();
 
     return ip
         ? `device:${ip}`
+        : "";
+}
+
+
+function topologyTreeCanonicalKey(
+    objectKind,
+    objectId
+) {
+    const kind = String(objectKind || "").trim();
+    const id = String(objectId || "").trim();
+
+    return kind && id
+        ? `${kind}:${id}`
         : "";
 }
 
@@ -199,7 +170,11 @@ function topologyTreeCreateNode(
         "";
 
     return {
-        id: resolvedRef,
+        id:
+            topologyTreeCanonicalKey(
+                objectKind,
+                device?.id
+            ) || resolvedRef,
         ref: resolvedRef,
 
         ip: device?.ip || "",
@@ -218,7 +193,9 @@ function topologyTreeCreateNode(
             confidence: 0,
             locked: false,
             reason:
-                "No relationship has been resolved."
+                "No relationship has been resolved.",
+            resolution_status: "no_evidence",
+            diagnostics: []
         },
 
         depth: 0,
@@ -236,8 +213,7 @@ function topologyTreeCreateNode(
                 ].includes(device?.device_type),
 
             manual:
-                objectKind === "infrastructure" ||
-                topologyTreeIsManual(device),
+                false,
 
             core_service: false,
 
@@ -255,17 +231,11 @@ function topologyTreeSetRelationship(
         source = "unknown",
         confidence = null,
         locked = false,
-        reason = ""
+        reason = "",
+        resolutionStatus = "resolved"
     } = {}
 ) {
     if (!node || !parent || node === parent) {
-        return false;
-    }
-
-    if (
-        node.relationship.locked &&
-        node.parent
-    ) {
         return false;
     }
 
@@ -275,15 +245,11 @@ function topologyTreeSetRelationship(
     node.relationship = {
         source,
 
-        confidence:
-            confidence ??
-            TOPOLOGY_RELATIONSHIP_CONFIDENCE[
-                source
-            ] ??
-            0,
-
+        confidence: confidence ?? 0,
         locked,
-        reason
+        reason,
+        resolution_status: resolutionStatus,
+        diagnostics: []
     };
 
     if (!parent.children.includes(node)) {
@@ -294,242 +260,170 @@ function topologyTreeSetRelationship(
 }
 
 
-function topologyTreeWouldCreateCycle(
-    node,
-    prospectiveParent
-) {
-    let cursor = prospectiveParent;
-    const visited = new Set();
-
-    while (cursor) {
-        if (cursor === node) {
-            return true;
-        }
-
-        if (visited.has(cursor)) {
-            return true;
-        }
-
-        visited.add(cursor);
-        cursor = cursor.parent;
-    }
-
-    return false;
-}
-
-
 function topologyTreeResolveNode(
-    value,
+    identity,
+    canonicalNodes,
     nodes,
     ipNodes
 ) {
-    const raw = String(value || "").trim();
+    const descriptor =
+        typeof identity === "object" && identity
+            ? identity
+            : {ref: identity};
+    const objectKind = descriptor.objectKind || "";
+    const objectId = descriptor.objectId || "";
+    const ref = descriptor.ref || "";
+    const canonicalKey =
+        topologyTreeCanonicalKey(
+            objectKind,
+            objectId
+        );
 
-    if (!raw) {
+    if (
+        canonicalKey &&
+        canonicalNodes.has(canonicalKey)
+    ) {
+        return canonicalNodes.get(canonicalKey);
+    }
+
+    const compatibilityRef =
+        String(ref || "").trim();
+
+    if (!compatibilityRef) {
         return null;
     }
 
-    if (nodes.has(raw)) {
-        return nodes.get(raw);
+    if (canonicalNodes.has(compatibilityRef)) {
+        return canonicalNodes.get(compatibilityRef);
     }
 
-    if (raw.startsWith("device:")) {
-        return nodes.get(raw) || null;
+    if (nodes.has(compatibilityRef)) {
+        return nodes.get(compatibilityRef);
     }
 
-    if (raw.startsWith("infra:")) {
-        return nodes.get(raw) || null;
+    if (compatibilityRef.startsWith("device:")) {
+        return nodes.get(compatibilityRef) || null;
     }
 
     return (
-        ipNodes.get(raw) ||
-        nodes.get(`device:${raw}`) ||
+        ipNodes.get(compatibilityRef) ||
+        nodes.get(`device:${compatibilityRef}`) ||
         null
     );
 }
 
 
-function topologyTreeApplyInfrastructureRelationships(
-    infrastructure,
+function topologyTreeApplyCanonicalRelationships(
+    canonicalPayload,
+    canonicalNodes,
     nodes,
     ipNodes
 ) {
-    const unresolved = [];
+    const diagnostics = [];
+    const relationships =
+        Array.isArray(canonicalPayload?.relationships)
+            ? canonicalPayload.relationships
+            : [];
 
-    infrastructure.forEach(item => {
-        const ref =
-            topologyTreeInfrastructureRef(item);
-
-        const node = nodes.get(ref);
-
-        if (!node) {
-            return;
-        }
-
-        const parentRef =
-            String(item?.parent_ref || "").trim();
-
-        /*
-         * A root object such as Internet deliberately
-         * has no parent.
-         */
-        if (!parentRef) {
-            return;
-        }
-
-        const parent =
-            topologyTreeResolveNode(
-                parentRef,
-                nodes,
-                ipNodes
-            );
-
-        if (!parent) {
-            unresolved.push({
-                subject: item,
-                reason:
-                    `Infrastructure parent ${parentRef} is not present.`
-            });
-
-            return;
-        }
-
+    relationships.forEach(relationship => {
         if (
-            topologyTreeWouldCreateCycle(
-                node,
-                parent
-            )
+            relationship?.resolved !== true ||
+            relationship?.resolution_status !==
+                "resolved"
         ) {
-            unresolved.push({
-                subject: item,
-                reason:
-                    "Infrastructure relationship would create a cycle."
-            });
-
             return;
         }
 
-        topologyTreeSetRelationship(
-            node,
-            parent,
-            {
-                transport:
-                    topologyTreeConnectionMethod(
-                        item
-                    ) || "wired",
+        const node = topologyTreeResolveNode({
+            objectKind: relationship.subject_kind,
+            objectId: relationship.subject_id,
+            ref: relationship.subject_ref
+        }, canonicalNodes, nodes, ipNodes);
 
-                source: "manual",
-                confidence: 100,
-                locked: true,
+        const parent = topologyTreeResolveNode({
+            objectKind: relationship.parent_kind,
+            objectId: relationship.parent_id,
+            ref: relationship.parent_ref
+        }, canonicalNodes, nodes, ipNodes);
 
-                reason:
-                    "Infrastructure relationship explicitly assigned by the user."
-            }
-        );
+        if (!node || !parent || node === parent) {
+            diagnostics.push({
+                code: "canonical_participant_missing",
+                subject_ref:
+                    relationship.subject_ref || null,
+                parent_ref:
+                    relationship.parent_ref || null
+            });
+            return;
+        }
+
+        if (node.parent) {
+            diagnostics.push({
+                code: "duplicate_canonical_subject",
+                subject_ref:
+                    relationship.subject_ref || null
+            });
+            return;
+        }
+
+        topologyTreeSetRelationship(node, parent, {
+            transport: relationship.transport,
+            source: relationship.provider,
+            confidence: relationship.confidence,
+            locked: [
+                "manual",
+                "infrastructure"
+            ].includes(relationship.provider),
+            reason: relationship.reason,
+            resolutionStatus:
+                relationship.resolution_status
+        });
+
+        node.flags.manual =
+            relationship.provider === "manual";
     });
 
-    return unresolved;
-}
+    const unresolved =
+        Array.isArray(
+            canonicalPayload?.unresolved_relationships
+        )
+            ? canonicalPayload.unresolved_relationships
+            : [];
 
+    unresolved.forEach(item => {
+        const node = topologyTreeResolveNode({
+            objectKind: item.object_kind,
+            objectId: item.id,
+            ref: item.ref
+        }, canonicalNodes, nodes, ipNodes);
 
-function topologyTreeApplyManualRelationships(
-    inventory,
-    nodes,
-    ipNodes
-) {
-    const unresolved = [];
-
-    inventory.forEach(device => {
-        if (!topologyTreeIsManual(device)) {
+        if (!node || node.parent) {
             return;
         }
 
-        const node = topologyTreeResolveNode(
-            topologyTreeDeviceRef(device),
-            nodes,
-            ipNodes
-        );
-
-        if (!node) {
-            return;
-        }
-
-        const parentRef =
-            String(
-                device.connection_parent_ref ||
-                (
-                    device.connection_parent_ip
-                        ? `device:${device.connection_parent_ip}`
-                        : ""
-                )
-            ).trim();
-
-        const transport =
-            topologyTreeConnectionMethod(device);
-
-        if (!parentRef || !transport) {
-            unresolved.push({
-                device,
-                reason:
-                    "Manual relationship is incomplete."
-            });
-
-            return;
-        }
-
-        const parent =
-            topologyTreeResolveNode(
-                parentRef,
-                nodes,
-                ipNodes
-            );
-
-        if (!parent) {
-            unresolved.push({
-                device,
-                reason:
-                    `Manual parent ${parentRef} is not currently present.`
-            });
-
-            return;
-        }
-
-        if (
-            topologyTreeWouldCreateCycle(
-                node,
-                parent
+        node.relationship = {
+            source: "unknown",
+            confidence: 0,
+            locked: false,
+            reason:
+                "No canonical relationship was resolved.",
+            resolution_status:
+                item.resolution_status || "no_evidence",
+            diagnostics: Array.isArray(
+                item.resolution_diagnostics
             )
-        ) {
-            unresolved.push({
-                device,
-                reason:
-                    "Manual relationship would create a cycle."
-            });
-
-            return;
-        }
-
-        topologyTreeSetRelationship(
-            node,
-            parent,
-            {
-                transport,
-                source: "manual",
-                confidence: 100,
-                locked: true,
-
-                reason:
-                    "Relationship explicitly assigned by the user."
-            }
-        );
+                ? item.resolution_diagnostics
+                : []
+        };
     });
 
-    return unresolved;
+    return diagnostics;
 }
 
 
 function topologyTreeIdentifyCoreServices(
     inventory,
+    canonicalNodes,
     nodes,
     ipNodes,
     router
@@ -543,7 +437,12 @@ function topologyTreeIdentifyCoreServices(
     inventory.forEach(device => {
         const node =
             topologyTreeResolveNode(
-                topologyTreeDeviceRef(device),
+                {
+                    objectKind: "device",
+                    objectId: device.id,
+                    ref: topologyTreeDeviceRef(device)
+                },
+                canonicalNodes,
                 nodes,
                 ipNodes
             );
@@ -580,251 +479,6 @@ function topologyTreeIdentifyCoreServices(
     });
 
     return services;
-}
-
-
-function topologyTreeStronglyWired(device) {
-    if (!device) {
-        return false;
-    }
-
-    const type =
-        topologyTreeNormalise(
-            device.device_type
-        );
-
-    const hostname =
-        topologyTreeNormalise(
-            device.hostname
-        );
-
-    const name =
-        topologyTreeNormalise(
-            device.display_name
-        );
-
-    /*
-     * These device roles are normally wired infrastructure
-     * endpoints. This is intentionally conservative.
-     */
-    if (
-        [
-            "nas",
-            "server",
-            "media_tuner",
-            "ups"
-        ].includes(type)
-    ) {
-        return true;
-    }
-
-    /*
-     * HDHomeRun devices are wired Ethernet tuners.
-     */
-    if (
-        hostname.startsWith("hdhr-") ||
-        name.includes("hd homerun") ||
-        name.includes("hdhomerun")
-    ) {
-        return true;
-    }
-
-    /*
-     * A computer with a BEACN agent is useful evidence in this
-     * environment. We give this a lower inferred confidence than
-     * explicit switch/SNMP evidence.
-     */
-    if (
-        type === "computer" &&
-        Boolean(device.agent_available)
-    ) {
-        return true;
-    }
-
-    return false;
-}
-
-
-function topologyTreeConservativeInference(
-    inventory,
-    nodes,
-    ipNodes,
-    router
-) {
-    if (!router) {
-        return;
-    }
-
-    /*
-     * Automatic upstream inference.
-     *
-     * If exactly one ISP gateway exists and the primary router
-     * has no parent, it is safe to place the router beneath that
-     * gateway.
-     *
-     * Explicit/manual relationships always win because this only
-     * runs when router.parent is empty.
-     */
-    if (!router.parent) {
-        const ispGateways =
-            [...nodes.values()]
-                .filter(node =>
-                    node.object_kind === "infrastructure" &&
-                    node.device?.infrastructure_type ===
-                        "isp_gateway"
-                );
-
-        if (ispGateways.length === 1) {
-            const gateway = ispGateways[0];
-
-            if (
-                !topologyTreeWouldCreateCycle(
-                    router,
-                    gateway
-                )
-            ) {
-                topologyTreeSetRelationship(
-                    router,
-                    gateway,
-                    {
-                        transport: "wired",
-                        source: "inferred",
-                        confidence: 85,
-                        locked: false,
-                        reason:
-                            "Primary router automatically placed beneath the single known ISP gateway."
-                    }
-                );
-            }
-        }
-    }
-
-    /*
-     * ----------------------------------------------------------
-     * Main wired distribution switch
-     * ----------------------------------------------------------
-     *
-     * Prefer a switch already attached directly to the primary
-     * router. In the current network this resolves Loft Switch.
-     *
-     * We only infer downstream relationships if exactly one such
-     * switch exists, avoiding guesses on networks with multiple
-     * parallel distribution switches.
-     */
-    const routerSwitches =
-        router.children.filter(node =>
-            node.device?.device_type === "switch"
-        );
-
-    const distributionSwitch =
-        routerSwitches.length === 1
-            ? routerSwitches[0]
-            : null;
-
-
-    if (distributionSwitch) {
-        /*
-         * Any unresolved discovered switch can safely become a
-         * downstream switch when there is one known distribution
-         * switch.
-         *
-         * Example:
-         *
-         * ASUS
-         *   -> Loft Switch
-         *        -> Kal's Room Switch
-         */
-        [...nodes.values()]
-            .filter(node =>
-                node.object_kind === "device" &&
-                node.device?.device_type === "switch" &&
-                node !== distributionSwitch &&
-                !node.parent
-            )
-            .forEach(node => {
-                if (
-                    topologyTreeWouldCreateCycle(
-                        node,
-                        distributionSwitch
-                    )
-                ) {
-                    return;
-                }
-
-                topologyTreeSetRelationship(
-                    node,
-                    distributionSwitch,
-                    {
-                        transport: "wired",
-                        source: "inferred",
-                        confidence: 70,
-                        locked: false,
-                        reason:
-                            "Unresolved switch placed beneath the single known wired distribution switch."
-                    }
-                );
-            });
-    }
-
-
-    inventory.forEach(device => {
-        const node =
-            topologyTreeResolveNode(
-                topologyTreeDeviceRef(device),
-                nodes,
-                ipNodes
-            );
-
-        if (!node || node.parent) {
-            return;
-        }
-
-        /*
-         * Strong wired endpoint evidence.
-         *
-         * This deliberately does not attempt to guess televisions,
-         * speakers, IoT devices, cameras, phones or laptops.
-         */
-        if (
-            distributionSwitch &&
-            topologyTreeStronglyWired(device)
-        ) {
-            if (
-                !topologyTreeWouldCreateCycle(
-                    node,
-                    distributionSwitch
-                )
-            ) {
-                topologyTreeSetRelationship(
-                    node,
-                    distributionSwitch,
-                    {
-                        transport: "wired",
-                        source: "inferred",
-                        confidence: 65,
-                        locked: false,
-                        reason:
-                            "Device role provides strong wired-endpoint evidence and one distribution switch is known."
-                    }
-                );
-
-                return;
-            }
-        }
-
-        if (node.flags.router) {
-            return;
-        }
-
-        if (node.flags.manual) {
-            return;
-        }
-
-        /*
-         * Deliberately conservative.
-         * Unknown physical relationships remain unresolved.
-         */
-    });
 }
 
 
@@ -989,15 +643,22 @@ function topologyTreeDiagnostics(tree) {
                     .map(node => node.depth)
             ),
 
-        unresolved_manual:
-            tree.unresolvedManual.length
+        unresolved_relationships:
+            tree.unresolvedCanonical.length,
+
+        relationship_api_available:
+            tree.relationshipsAvailable,
+
+        ingestion_diagnostics:
+            tree.ingestionDiagnostics.length
     };
 }
 
 
 function buildTopologyTree(
     inventory = [],
-    infrastructureInventory = []
+    infrastructureInventory = [],
+    canonicalPayload = null
 ) {
     const safeInventory =
         Array.isArray(inventory)
@@ -1010,6 +671,7 @@ function buildTopologyTree(
             : [];
 
     const nodes = new Map();
+    const canonicalNodes = new Map();
     const ipNodes = new Map();
 
 
@@ -1034,6 +696,10 @@ function buildTopologyTree(
             );
 
         nodes.set(ref, node);
+
+        if (node.id) {
+            canonicalNodes.set(node.id, node);
+        }
 
         if (device.ip) {
             ipNodes.set(device.ip, node);
@@ -1069,6 +735,10 @@ function buildTopologyTree(
 
         nodes.set(ref, node);
 
+        if (node.id) {
+            canonicalNodes.set(node.id, node);
+        }
+
         if (
             device.ip &&
             !ipNodes.has(device.ip)
@@ -1086,47 +756,57 @@ function buildTopologyTree(
     const primaryRouter =
         routers.length
             ? topologyTreeResolveNode(
-                topologyTreeDeviceRef(
-                    routers[0]
-                ),
+                {
+                    objectKind: "device",
+                    objectId: routers[0].id,
+                    ref: topologyTreeDeviceRef(
+                        routers[0]
+                    )
+                },
+                canonicalNodes,
                 nodes,
                 ipNodes
             )
             : null;
 
 
-    const unresolvedInfrastructure =
-        topologyTreeApplyInfrastructureRelationships(
-            safeInfrastructure,
-            nodes,
-            ipNodes
+    const relationshipsAvailable =
+        canonicalPayload?.available === true &&
+        Array.isArray(
+            canonicalPayload.relationships
+        ) &&
+        Array.isArray(
+            canonicalPayload.unresolved_relationships
         );
 
+    const ingestionDiagnostics =
+        relationshipsAvailable
+            ? topologyTreeApplyCanonicalRelationships(
+                canonicalPayload,
+                canonicalNodes,
+                nodes,
+                ipNodes
+            )
+            : [{
+                code: "canonical_relationships_unavailable"
+            }];
 
-    const unresolvedDevices =
-        topologyTreeApplyManualRelationships(
-            safeInventory,
-            nodes,
-            ipNodes
-        );
+    if (!relationshipsAvailable) {
+        nodes.forEach(node => {
+            node.relationship.resolution_status =
+                "unavailable";
+        });
+    }
 
 
     const coreServices =
         topologyTreeIdentifyCoreServices(
             safeInventory,
+            canonicalNodes,
             nodes,
             ipNodes,
             primaryRouter
         );
-
-
-    topologyTreeConservativeInference(
-        safeInventory,
-        nodes,
-        ipNodes,
-        primaryRouter
-    );
-
 
     topologyTreeSortChildren(nodes);
 
@@ -1185,21 +865,27 @@ function buildTopologyTree(
 
         roots,
         nodes,
+        canonicalNodes,
         ipNodes,
 
         coreServices,
         unassigned,
 
-        unresolvedManual: [
-            ...unresolvedInfrastructure,
-            ...unresolvedDevices
-        ],
+        unresolvedCanonical:
+            relationshipsAvailable
+                ? canonicalPayload
+                    .unresolved_relationships
+                : [],
+
+        relationshipsAvailable,
+        ingestionDiagnostics,
 
 
         getNode(value) {
             return (
                 topologyTreeResolveNode(
                     value,
+                    canonicalNodes,
                     nodes,
                     ipNodes
                 )
@@ -1211,6 +897,7 @@ function buildTopologyTree(
             return topologyTreeBuildPath(
                 topologyTreeResolveNode(
                     value,
+                    canonicalNodes,
                     nodes,
                     ipNodes
                 )
@@ -1222,6 +909,7 @@ function buildTopologyTree(
             return topologyTreeDescendants(
                 topologyTreeResolveNode(
                     value,
+                    canonicalNodes,
                     nodes,
                     ipNodes
                 )

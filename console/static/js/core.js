@@ -1,5 +1,10 @@
 let devices = [];
 let infrastructure = [];
+let canonicalRelationships = {
+  available: false,
+  relationships: [],
+  unresolved_relationships: []
+};
   let activeDeviceTypeFilter = null;
   let current = null;
   let activeTab = 'overview';
@@ -241,4 +246,3 @@ const selected = () => devices.find(device => device.ip === select.value);
       <div class="range">${esc(range)}</div>
     </div>`;
   }
-

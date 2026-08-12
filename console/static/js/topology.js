@@ -175,19 +175,6 @@ function topologySortDevices(items) {
 }
 
 
-function topologyInfrastructureType(device) {
-    if (device.device_type === 'switch') {
-        return 'wired';
-    }
-
-    if (device.device_type === 'access_point') {
-        return 'wireless';
-    }
-
-    return null;
-}
-
-
 function topologyConnectionMethod(device) {
     const method = String(
         device.connection_method || ''
@@ -198,31 +185,6 @@ function topologyConnectionMethod(device) {
     }
 
     return null;
-}
-
-
-function topologyIsCoreService(
-    device,
-    primaryRouter
-) {
-    const evidence = [
-        device.display_name,
-        device.hostname
-    ]
-        .filter(Boolean)
-        .join(' ')
-        .toLowerCase();
-
-    const manuallyConnectedToRouter =
-        device.connection_source === 'manual' &&
-        device.connection_parent_ip === primaryRouter.ip &&
-        topologyConnectionMethod(device) === 'wired';
-
-    const isPiHole =
-        evidence.includes('pihole') ||
-        evidence.includes('pi-hole');
-
-    return manuallyConnectedToRouter && isPiHole;
 }
 
 

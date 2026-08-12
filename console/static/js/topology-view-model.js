@@ -86,7 +86,16 @@ function topologyTreeInfrastructureBranch(node) {
             node.transport,
 
         relationshipSource:
-            node.relationship.source
+            node.relationship.source,
+
+        relationshipConfidence:
+            node.relationship.confidence,
+
+        relationshipReason:
+            node.relationship.reason,
+
+        resolutionStatus:
+            node.relationship.resolution_status
     };
 }
 
@@ -172,8 +181,11 @@ function topologyTreeToViewModel(tree) {
     const wiredDirect = [];
     const wirelessDirect = [];
 
-    if (tree.root) {
-        tree.root.children.forEach(child => {
+    const directParent =
+        tree.primaryRouter || tree.root;
+
+    if (directParent) {
+        directParent.children.forEach(child => {
             if (
                 child.flags.infrastructure ||
                 coreServiceIps.has(child.ip)
@@ -275,6 +287,10 @@ function topologyTreeToViewModel(tree) {
 
                     relationshipReason:
                         node.relationship.reason,
+
+                    resolutionStatus:
+                        node.relationship
+                            .resolution_status,
 
                     treeNode: node
                 };
@@ -396,8 +412,11 @@ function topologyTreeToViewModel(tree) {
         diagnostics:
             tree.diagnostics || null,
 
+        relationshipsAvailable:
+            tree.relationshipsAvailable,
+
         modelSource:
-            'relationship-engine'
+            'canonical-relationships'
     };
 }
 
@@ -419,7 +438,8 @@ function buildTopologyModel() {
                 : [],
             Array.isArray(infrastructure)
                 ? infrastructure
-                : []
+                : [],
+            canonicalRelationships
         );
 
     return topologyTreeToViewModel(tree);

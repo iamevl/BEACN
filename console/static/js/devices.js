@@ -254,12 +254,47 @@
 
 
   async function refreshDevices() {
+    const relationshipRequest = fetch(
+      '/api/relationships'
+    )
+      .then(async response => {
+        if (!response.ok) {
+          throw new Error(
+            `Relationship API returned ${response.status}`
+          );
+        }
+
+        const payload = await response.json();
+
+        if (
+          !payload ||
+          !Array.isArray(payload.relationships) ||
+          !Array.isArray(payload.unresolved_relationships)
+        ) {
+          throw new Error(
+            'Relationship API returned an invalid payload'
+          );
+        }
+
+        return {
+          ...payload,
+          available: true
+        };
+      })
+      .catch(error => ({
+        available: false,
+        relationships: [],
+        unresolved_relationships: [],
+        error: String(error?.message || error)
+      }));
+
     const response = await fetch('/api/devices');
     const payload = await response.json();
     const oldValue = select.value;
 
     devices = payload.devices || [];
     infrastructure = payload.infrastructure || [];
+    canonicalRelationships = await relationshipRequest;
     renderDeviceOptions(oldValue);
 
     if (typeof refreshTopology === 'function') {
@@ -284,4 +319,3 @@
 
     await details(false);
   }
-

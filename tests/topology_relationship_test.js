@@ -1,238 +1,374 @@
-const assert = require('node:assert/strict');
-const fs = require('node:fs');
-const test = require('node:test');
-const vm = require('node:vm');
+"use strict";
+
+const assert = require("node:assert/strict");
+const fs = require("node:fs");
+const test = require("node:test");
+const vm = require("node:vm");
 
 const TREE_SOURCE = fs.readFileSync(
-  'console/static/js/topology-tree.js',
-  'utf8'
+    "console/static/js/topology-tree.js",
+    "utf8"
 );
 const VIEW_SOURCE = fs.readFileSync(
-  'console/static/js/topology-view-model.js',
-  'utf8'
+    "console/static/js/topology-view-model.js",
+    "utf8"
 );
 
-function device(ip, deviceType, extra = {}) {
-  return {
-    id: `uuid-${ip}`,
-    ip,
-    hostname: `host-${ip}`,
-    display_name: '',
-    device_type: deviceType,
-    is_online: 1,
-    connection_method: 'automatic',
-    connection_source: 'inferred',
-    ...extra,
-  };
+function device(number, deviceType, extra = {}) {
+    const ip = `192.0.2.${number}`;
+    return {
+        id: `device-${number}`,
+        ip,
+        hostname: `host-${number}.example.invalid`,
+        display_name: `Example Device ${number}`,
+        device_type: deviceType,
+        is_online: 1,
+        ...extra,
+    };
 }
 
-function infrastructure(id, type, parentRef = '', method = 'wired') {
-  return {
-    id,
-    ref: `infra:${id}`,
-    name: `Example ${id}`,
-    infrastructure_type: type,
-    parent_ref: parentRef,
-    connection_method: method,
-    interfaces: [],
-  };
+function infrastructure(id, type) {
+    return {
+        id,
+        ref: `infra:${id}`,
+        name: `Example ${id}`,
+        infrastructure_type: type,
+        interfaces: [],
+    };
 }
 
-function environment(inventory = [], infra = []) {
-  const context = {
-    window: {},
-    devices: inventory,
-    infrastructure: infra,
-    topologySortDevices(items) {
-      return [...items].sort((a, b) => a.ip.localeCompare(b.ip));
-    },
-    topologySyntheticRouter() {
-      return device('', 'router', {synthetic: true});
-    },
-    topologyDeviceName(item) {
-      return item.display_name || item.hostname || item.ip;
-    },
-    deviceTypeDetails(type) {
-      return {label: type, colour: '#000000'};
-    },
-    activeDeviceTypeFilter: null,
-    Array,
-    Boolean,
-    Map,
-    Math,
-    Number,
-    Set,
-    String,
-  };
-  vm.createContext(context);
-  vm.runInContext(TREE_SOURCE, context);
-  vm.runInContext(VIEW_SOURCE, context);
-  return context;
+function identity(item) {
+    const kind = item.infrastructure_type
+        ? "infrastructure"
+        : "device";
+    const ref = kind === "infrastructure"
+        ? item.ref
+        : `device:${item.ip}`;
+    return {kind, id: item.id, ref};
 }
 
-test('configured infrastructure hierarchy is authoritative', () => {
-  const router = device('192.0.2.1', 'router');
-  const internet = infrastructure('internet', 'internet', '', 'virtual');
-  const gateway = infrastructure('gateway', 'isp_gateway', internet.ref);
-  const distribution = infrastructure('distribution', 'switch', `device:${router.ip}`);
-  const context = environment([router], [internet, gateway, distribution]);
-  const tree = context.window.buildTopologyTree(
-    context.devices,
-    context.infrastructure
-  );
+function relationship(subject, parent, transport = "wired", extra = {}) {
+    const left = identity(subject);
+    const right = identity(parent);
+    return {
+        resolved: true,
+        resolution_status: "resolved",
+        subject_id: left.id,
+        subject_kind: left.kind,
+        subject_ref: left.ref,
+        parent_id: right.id,
+        parent_kind: right.kind,
+        parent_ref: right.ref,
+        transport,
+        confidence: 100,
+        reason: "synthetic_canonical_relationship",
+        provider: "manual",
+        ...extra,
+    };
+}
 
-  assert.equal(tree.root.ref, internet.ref);
-  assert.equal(tree.getNode(gateway.ref).parent.ref, internet.ref);
-  assert.equal(tree.getNode(distribution.ref).parent.ref, `device:${router.ip}`);
-  assert.equal(tree.getNode(distribution.ref).relationship.source, 'manual');
-  assert.equal(tree.getNode(distribution.ref).relationship.confidence, 100);
-  assert.equal(tree.getNode(distribution.ref).relationship.locked, true);
+function payload(relationships = [], unresolved = []) {
+    return {
+        available: true,
+        relationships,
+        unresolved_relationships: unresolved,
+    };
+}
+
+function unresolved(item, status) {
+    const subject = identity(item);
+    return {
+        id: subject.id,
+        object_kind: subject.kind,
+        ref: subject.ref,
+        resolved: false,
+        resolution_status: status,
+        resolution_diagnostics: [{code: status}],
+    };
+}
+
+function environment(inventory = [], infra = [], canonical = payload()) {
+    const context = {
+        window: {},
+        devices: inventory,
+        infrastructure: infra,
+        canonicalRelationships: canonical,
+        topologySortDevices(items) {
+            return [...items].sort((a, b) =>
+                a.ip.localeCompare(b.ip)
+            );
+        },
+        topologySyntheticRouter() {
+            return {
+                id: "synthetic-router",
+                ip: "",
+                device_type: "router",
+                synthetic: true,
+            };
+        },
+        topologyDeviceName(item) {
+            return item.display_name || item.hostname || item.ip;
+        },
+        deviceTypeDetails(type) {
+            return {label: type, colour: "#000000"};
+        },
+        activeDeviceTypeFilter: null,
+        Array,
+        Boolean,
+        Map,
+        Math,
+        Number,
+        Set,
+        String,
+    };
+    vm.createContext(context);
+    vm.runInContext(TREE_SOURCE, context);
+    vm.runInContext(VIEW_SOURCE, context);
+    return context;
+}
+
+function tree(context) {
+    return context.window.buildTopologyTree(
+        context.devices,
+        context.infrastructure,
+        context.canonicalRelationships
+    );
+}
+
+test("canonical infrastructure hierarchy supports arbitrary depth", () => {
+    const router = device(1, "router");
+    const internet = infrastructure("internet", "internet");
+    const gateway = infrastructure("gateway", "isp_gateway");
+    const distribution = infrastructure("distribution", "switch");
+    const access = infrastructure("access", "access_point");
+    const relationships = [
+        relationship(gateway, internet, "virtual"),
+        relationship(router, gateway),
+        relationship(distribution, router),
+        relationship(access, distribution),
+    ];
+    const context = environment(
+        [router],
+        [internet, gateway, distribution, access],
+        payload(relationships)
+    );
+    const result = tree(context);
+
+    assert.equal(result.root.ref, internet.ref);
+    assert.equal(result.getNode(access.ref).depth, 4);
+    assert.equal(
+        result.getNode("infrastructure:access").parent.ref,
+        distribution.ref
+    );
 });
 
-test('manual device parent and transport are authoritative', () => {
-  const router = device('192.0.2.1', 'router');
-  const client = device('192.0.2.10', 'phone', {
-    connection_method: 'wireless',
-    connection_source: 'manual',
-    connection_parent_ref: `device:${router.ip}`,
-  });
-  const context = environment([router, client]);
-  const tree = context.window.buildTopologyTree(context.devices, []);
-  const node = tree.getNode(`device:${client.ip}`);
+test("manual device to infrastructure uses canonical metadata directly", () => {
+    const endpoint = device(10, "nas");
+    const parent = infrastructure("switch", "switch");
+    const winner = relationship(endpoint, parent, "wired", {
+        confidence: 73,
+        reason: "server_selected_reason",
+        provider: "generic",
+    });
+    const result = tree(environment(
+        [endpoint],
+        [parent],
+        payload([winner])
+    ));
+    const node = result.getNode(`device:${endpoint.ip}`);
 
-  assert.equal(node.parent.ref, `device:${router.ip}`);
-  assert.equal(node.transport, 'wireless');
-  assert.equal(node.relationship.confidence, 100);
-  assert.equal(node.relationship.locked, true);
+    assert.equal(node.parent.ref, parent.ref);
+    assert.equal(node.transport, "wired");
+    assert.equal(node.relationship.source, "generic");
+    assert.equal(node.relationship.confidence, 73);
+    assert.equal(node.relationship.locked, false);
+    assert.equal(node.relationship.reason, "server_selected_reason");
+    assert.equal(node.relationship.resolution_status, "resolved");
 });
 
-test('single distribution switch inference freezes current roles', () => {
-  const router = device('192.0.2.1', 'router');
-  const distribution = infrastructure('distribution', 'switch', `device:${router.ip}`);
-  const childSwitch = device('192.0.2.20', 'switch');
-  const nas = device('192.0.2.21', 'nas');
-  const phone = device('192.0.2.22', 'phone');
-  const context = environment(
-    [router, childSwitch, nas, phone],
-    [distribution]
-  );
-  const tree = context.window.buildTopologyTree(context.devices, context.infrastructure);
+test("direct wired, direct wireless and WAP clients remain presentation branches", () => {
+    const router = device(1, "router");
+    const wired = device(11, "computer");
+    const wireless = device(12, "phone");
+    const wap = device(13, "access_point");
+    const client = device(14, "tablet");
+    const canonical = payload([
+        relationship(wired, router, "wired"),
+        relationship(wireless, router, "wireless"),
+        relationship(wap, router, "wired"),
+        relationship(client, wap, "wireless"),
+    ]);
+    const context = environment(
+        [router, wired, wireless, wap, client],
+        [],
+        canonical
+    );
+    const model = context.buildTopologyModel();
 
-  assert.equal(tree.getNode(`device:${childSwitch.ip}`).parent.ref, distribution.ref);
-  assert.equal(tree.getNode(`device:${childSwitch.ip}`).relationship.confidence, 70);
-  assert.equal(tree.getNode(`device:${nas.ip}`).parent.ref, distribution.ref);
-  assert.equal(tree.getNode(`device:${nas.ip}`).relationship.confidence, 65);
-  assert.equal(tree.getNode(`device:${phone.ip}`).parent, null);
-  assert.deepEqual(
-    Array.from(tree.unassigned, node => node.ref),
-    [`device:${phone.ip}`]
-  );
+    assert.deepEqual(
+        Array.from(model.columns[0].direct, item => item.id),
+        [wired.id]
+    );
+    assert.deepEqual(
+        Array.from(model.columns[1].direct, item => item.id),
+        [wireless.id]
+    );
+    const wapColumn = model.columns.find(
+        column => column.kind === "access_point"
+    );
+    assert.deepEqual(
+        Array.from(wapColumn.clients, item => item.id),
+        [client.id]
+    );
 });
 
-test('view model separates direct wired, wireless, WAP and unassigned branches', () => {
-  const router = device('192.0.2.1', 'router');
-  const wired = device('192.0.2.10', 'computer', {
-    connection_source: 'manual',
-    connection_method: 'wired',
-    connection_parent_ref: `device:${router.ip}`,
-  });
-  const wireless = device('192.0.2.11', 'phone', {
-    connection_source: 'manual',
-    connection_method: 'wireless',
-    connection_parent_ref: `device:${router.ip}`,
-  });
-  const wap = device('192.0.2.12', 'access_point', {
-    connection_source: 'manual',
-    connection_method: 'wired',
-    connection_parent_ref: `device:${router.ip}`,
-  });
-  const wapClient = device('192.0.2.13', 'tablet', {
-    connection_source: 'manual',
-    connection_method: 'wireless',
-    connection_parent_ref: `device:${wap.ip}`,
-  });
-  const unknown = device('192.0.2.14', 'speaker');
-  const context = environment([router, wired, wireless, wap, wapClient, unknown]);
-  const model = context.buildTopologyModel();
+test("device role never reconstructs an absent canonical relationship", () => {
+    const router = device(1, "router");
+    const roles = ["nas", "server", "media_tuner", "ups"];
+    const endpoints = roles.map((role, index) =>
+        device(20 + index, role, {agent_available: 1})
+    );
+    const result = tree(environment(
+        [router, ...endpoints],
+        [],
+        payload([], endpoints.map(item =>
+            unresolved(item, "no_evidence")
+        ))
+    ));
 
-  assert.deepEqual(Array.from(model.columns[0].direct, item => item.ip), [wired.ip]);
-  assert.deepEqual(Array.from(model.columns[1].direct, item => item.ip), [wireless.ip]);
-  const wapColumn = model.columns.find(column => column.kind === 'access_point');
-  assert.equal(wapColumn.device.ip, wap.ip);
-  assert.deepEqual(Array.from(wapColumn.clients, item => item.ip), [wapClient.ip]);
-  assert.deepEqual(Array.from(model.unassigned, item => item.ip), [unknown.ip]);
-  const placed = [
-    ...model.columns.flatMap(column => column.direct || []),
-    ...wapColumn.clients,
-    ...model.unassigned,
-  ];
-  assert.equal(new Set(placed.map(item => item.ip)).size, placed.length);
+    endpoints.forEach(item => {
+        const node = result.getNode(`device:${item.ip}`);
+        assert.equal(node.parent, null);
+        assert.equal(node.relationship.resolution_status, "no_evidence");
+    });
 });
 
-test('infrastructure can nest beneath infrastructure', () => {
-  const router = device('192.0.2.1', 'router');
-  const parent = infrastructure('parent', 'switch', `device:${router.ip}`);
-  const child = infrastructure('child', 'switch', parent.ref);
-  const context = environment([router], [parent, child]);
-  const tree = context.window.buildTopologyTree(context.devices, context.infrastructure);
+test("all canonical unresolved statuses remain unattached", () => {
+    const statuses = [
+        "no_evidence",
+        "invalid_manual",
+        "invalid_parent",
+        "ambiguous",
+        "graph_rejected",
+    ];
+    const endpoints = statuses.map((status, index) =>
+        device(30 + index, "phone", {status})
+    );
+    const result = tree(environment(
+        endpoints,
+        [],
+        payload([], endpoints.map((item, index) =>
+            unresolved(item, statuses[index])
+        ))
+    ));
 
-  assert.equal(tree.getNode(child.ref).parent.ref, parent.ref);
-  assert.deepEqual(
-    Array.from(tree.getNode(parent.ref).children, node => node.ref),
-    [child.ref]
-  );
+    endpoints.forEach((item, index) => {
+        const node = result.getNode(`device:${item.ip}`);
+        assert.equal(node.parent, null);
+        assert.equal(
+            node.relationship.resolution_status,
+            statuses[index]
+        );
+    });
 });
 
-test('missing parent and unknown transport fail into unresolved manual diagnostics', () => {
-  const router = device('192.0.2.1', 'router');
-  const missing = device('192.0.2.10', 'phone', {
-    connection_source: 'manual',
-    connection_method: 'wired',
-    connection_parent_ref: 'infra:deleted',
-  });
-  const unknownTransport = device('192.0.2.11', 'phone', {
-    connection_source: 'manual',
-    connection_method: 'bluetooth',
-    connection_parent_ref: `device:${router.ip}`,
-  });
-  const context = environment([router, missing, unknownTransport]);
-  const tree = context.window.buildTopologyTree(context.devices, []);
+test("missing canonical parent fails honestly without substitution", () => {
+    const endpoint = device(40, "nas");
+    const absent = infrastructure("absent", "switch");
+    const result = tree(environment(
+        [endpoint],
+        [],
+        payload([relationship(endpoint, absent)])
+    ));
 
-  assert.equal(tree.unresolvedManual.length, 2);
-  assert.equal(tree.getNode(`device:${missing.ip}`).parent, null);
-  assert.equal(tree.getNode(`device:${unknownTransport.ip}`).parent, null);
+    assert.equal(result.getNode(`device:${endpoint.ip}`).parent, null);
+    assert.equal(result.ingestionDiagnostics.length, 1);
+    assert.equal(
+        result.ingestionDiagnostics[0].code,
+        "canonical_participant_missing"
+    );
 });
 
-test('browser relationship construction rejects manual cycles', () => {
-  const first = device('192.0.2.70', 'switch', {
-    connection_source: 'manual',
-    connection_method: 'wired',
-    connection_parent_ref: 'device:192.0.2.71',
-  });
-  const second = device('192.0.2.71', 'switch', {
-    connection_source: 'manual',
-    connection_method: 'wired',
-    connection_parent_ref: 'device:192.0.2.70',
-  });
-  const context = environment([first, second]);
-  const tree = context.window.buildTopologyTree(context.devices, []);
+test("canonical UUID lookup wins over an incorrect compatibility ref", () => {
+    const first = device(50, "phone");
+    const second = device(51, "phone");
+    const parent = infrastructure("parent", "switch");
+    const winner = relationship(first, parent);
+    winner.subject_ref = `device:${second.ip}`;
+    const result = tree(environment(
+        [first, second],
+        [parent],
+        payload([winner])
+    ));
 
-  assert.equal(tree.getNode(`device:${first.ip}`).parent.ref, `device:${second.ip}`);
-  assert.equal(tree.getNode(`device:${second.ip}`).parent, null);
-  assert.equal(tree.unresolvedManual.length, 1);
-  assert.match(tree.unresolvedManual[0].reason, /cycle/);
+    assert.equal(result.getNode(`device:${first.ip}`).parent.ref, parent.ref);
+    assert.equal(result.getNode(`device:${second.ip}`).parent, null);
 });
 
-test('device refs are stable by IP even when canonical UUIDs differ', () => {
-  const first = environment([device('192.0.2.40', 'phone', {id: 'uuid-one'})]);
-  const second = environment([device('192.0.2.40', 'phone', {id: 'uuid-two'})]);
+test("compatibility refs remain a fallback when canonical IDs are absent", () => {
+    const endpoint = device(60, "phone");
+    const parent = infrastructure("parent", "switch");
+    const winner = relationship(endpoint, parent, "wireless");
+    delete winner.subject_id;
+    delete winner.subject_kind;
+    delete winner.parent_id;
+    delete winner.parent_kind;
+    const result = tree(environment(
+        [endpoint],
+        [parent],
+        payload([winner])
+    ));
 
-  assert.equal(
-    first.window.buildTopologyTree(first.devices, []).nodes.keys().next().value,
-    second.window.buildTopologyTree(second.devices, []).nodes.keys().next().value
-  );
-  assert.equal(
-    first.window.buildTopologyTree(first.devices, []).nodes.keys().next().value,
-    'device:192.0.2.40'
-  );
+    assert.equal(result.getNode(`device:${endpoint.ip}`).parent.ref, parent.ref);
+    assert.equal(result.getNode(`device:${endpoint.ip}`).transport, "wireless");
+});
+
+test("canonical and compatibility aliases never duplicate nodes", () => {
+    const endpoint = device(70, "phone");
+    const parent = infrastructure("parent", "switch");
+    const result = tree(environment(
+        [endpoint],
+        [parent],
+        payload([relationship(endpoint, parent)])
+    ));
+
+    assert.equal(result.nodes.size, 2);
+    assert.equal(result.canonicalNodes.size, 2);
+    assert.equal(
+        result.getNode(`device:${endpoint.id}`),
+        result.getNode(`device:${endpoint.ip}`)
+    );
+});
+
+test("empty canonical payload leaves every endpoint unresolved", () => {
+    const router = device(1, "router");
+    const endpoint = device(80, "nas");
+    const result = tree(environment(
+        [router, endpoint],
+        [],
+        payload()
+    ));
+
+    assert.equal(result.relationshipsAvailable, true);
+    assert.equal(result.getNode(`device:${endpoint.ip}`).parent, null);
+});
+
+test("unavailable or malformed relationship data never invokes inference", () => {
+    const router = device(1, "router");
+    const endpoint = device(90, "nas");
+
+    for (const canonical of [
+        {available: false},
+        {available: true, relationships: {}},
+    ]) {
+        const result = tree(environment(
+            [router, endpoint],
+            [],
+            canonical
+        ));
+        const node = result.getNode(`device:${endpoint.ip}`);
+        assert.equal(result.relationshipsAvailable, false);
+        assert.equal(node.parent, null);
+        assert.equal(node.relationship.resolution_status, "unavailable");
+    }
 });

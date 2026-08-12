@@ -3,13 +3,13 @@
 const fs = require("node:fs");
 const vm = require("node:vm");
 
-const source = fs.readFileSync(
-    "console/static/js/topology-tree.js",
-    "utf8"
-);
-
 const input = JSON.parse(
     fs.readFileSync(0, "utf8")
+);
+
+const source = input.tree_source || fs.readFileSync(
+    "console/static/js/topology-tree.js",
+    "utf8"
 );
 
 const context = {
@@ -28,7 +28,8 @@ vm.runInContext(source, context);
 
 const tree = context.window.buildTopologyTree(
     input.devices,
-    input.infrastructure
+    input.infrastructure,
+    input.canonical_relationships
 );
 
 const identities = new Map();
@@ -78,5 +79,9 @@ const unresolved = [...tree.nodes.values()]
 process.stdout.write(JSON.stringify({
     relationships,
     unresolved,
-    unresolved_manual: tree.unresolvedManual.length,
+    node_count: tree.nodes.size,
+    unique_node_count:
+        new Set(tree.nodes.values()).size,
+    ingestion_diagnostics:
+        tree.ingestionDiagnostics,
 }));

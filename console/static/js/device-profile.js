@@ -61,7 +61,11 @@ function deviceRelationshipInspector(device) {
     const tree = buildTopologyTree(
         Array.isArray(devices)
             ? devices
-            : []
+            : [],
+        Array.isArray(infrastructure)
+            ? infrastructure
+            : [],
+        canonicalRelationships
     );
 
     const node = tree.getNode(device.ip);
@@ -99,6 +103,8 @@ function deviceRelationshipInspector(device) {
 
     const sourceLabel = {
         manual: "Manual",
+        infrastructure: "Configured infrastructure",
+        generic: "Generic inference",
         agent: "Agent",
         learned: "Learned",
         inferred: "Inferred",
