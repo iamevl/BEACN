@@ -32,7 +32,7 @@ from werkzeug.security import (
     generate_password_hash,
 )
 
-from beacn.database import initialise_schema
+from beacn.database import apply_migrations, initialise_schema
 from beacn.database.schema import (
     initialise_auth_schema,
     initialise_password_recovery_schema,
@@ -1379,6 +1379,7 @@ def init_db():
             initialise_auth_schema(conn)
             initialise_security_settings_schema(conn)
             initialise_password_recovery_schema(conn)
+            apply_migrations(conn)
 
 
 @app.get("/")

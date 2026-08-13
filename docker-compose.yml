@@ -38,9 +38,17 @@ services:
       BEACN_SNMP_COMMUNITY: "${BEACN_SNMP_COMMUNITY:-}"
       BEACN_SNMP_CACHE_TTL_SECONDS: "${BEACN_SNMP_CACHE_TTL_SECONDS:-300}"
 
+      # Optional management-credential encryption. Production deployments
+      # should mount a read-only secret file and set its container path here.
+      BEACN_ENCRYPTION_KEY_FILE: "${BEACN_ENCRYPTION_KEY_FILE:-}"
+      BEACN_ENCRYPTION_KEY: "${BEACN_ENCRYPTION_KEY:-}"
+      BEACN_ENCRYPTION_LEGACY_KEYS: "${BEACN_ENCRYPTION_LEGACY_KEYS:-}"
+
     volumes:
       - ./data:/data
       - /var/run/docker.sock:/var/run/docker.sock:ro
+      # Example only; create the host file outside Git before enabling:
+      # - /secure/beacn/credential-keys:/run/secrets/beacn-credential-keys:ro
 
     cap_add:
       - NET_RAW

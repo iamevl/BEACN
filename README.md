@@ -234,6 +234,24 @@ or install it as a Windows Service.
 - Switch monitoring
 - Multi-site support
 
+### Optional management credential encryption
+
+The management-source persistence foundation remains locked when no
+credential encryption key is configured. Normal monitoring continues and no
+plaintext fallback is used.
+
+For production, set `BEACN_ENCRYPTION_KEY_FILE` to a read-only mounted secret
+file. The file contains URL-safe Fernet keys, one per non-empty line. The first
+key encrypts new credentials and remaining keys decrypt legacy records. As a
+fallback, `BEACN_ENCRYPTION_KEY` supplies the active key and
+`BEACN_ENCRYPTION_LEGACY_KEYS` supplies comma-separated legacy keys. Keep these
+keys separate from SQLite backups and from `BEACN_SECRET_KEY`.
+
+Management sources use application-validated canonical device or
+infrastructure-object identities. Participant deletion cleanup is deferred;
+the repository detects orphaned sources and excludes them from future
+collection eligibility until explicit cleanup is implemented.
+
 ---
 
 ## Philosophy
@@ -265,5 +283,4 @@ MIT License
 ---
 
 Built with ❤️ for homelabs, labs and small infrastructure teams.
-
 
