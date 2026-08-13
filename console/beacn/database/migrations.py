@@ -134,23 +134,25 @@ def apply_migrations(
     """)
     conn.commit()
 
-    applied = {
-        row[0]
-        for row in conn.execute("SELECT migration_id FROM schema_migrations").fetchall()
-    }
+    try:
+        conn.execute("BEGIN IMMEDIATE")
+        applied = {
+            row[0]
+            for row in conn.execute(
+                "SELECT migration_id FROM schema_migrations"
+            ).fetchall()
+        }
 
-    for migration in migrations:
-        if migration.migration_id in applied:
-            continue
+        for migration in migrations:
+            if migration.migration_id in applied:
+                continue
 
-        try:
-            conn.execute("BEGIN IMMEDIATE")
             migration.apply(conn)
             conn.execute(
                 "INSERT INTO schema_migrations (migration_id) VALUES (?)",
                 (migration.migration_id,),
             )
-            conn.commit()
-        except Exception:
-            conn.rollback()
-            raise
+        conn.commit()
+    except Exception:
+        conn.rollback()
+        raise

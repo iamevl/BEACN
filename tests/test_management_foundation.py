@@ -2,6 +2,8 @@ import base64
 import hashlib
 import json
 import sys
+import threading
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 from uuid import uuid4
 
@@ -576,3 +578,73 @@ def test_failed_migration_rolls_back_and_is_not_recorded(tmp_path):
             ).fetchone()
             is None
         )
+
+    def corrected(conn):
+        conn.execute("CREATE TABLE should_roll_back (id INTEGER)")
+
+    with database.connect() as conn:
+        apply_migrations(conn, [Migration("synthetic_failure", corrected)])
+        assert (
+            conn.execute(
+                "SELECT COUNT(*) FROM schema_migrations "
+                "WHERE migration_id = 'synthetic_failure'"
+            ).fetchone()[0]
+            == 1
+        )
+        assert (
+            conn.execute(
+                "SELECT 1 FROM sqlite_master WHERE name = 'should_roll_back'"
+            ).fetchone()
+            is not None
+        )
+        assert conn.execute("PRAGMA integrity_check").fetchone()[0] == "ok"
+
+
+def test_concurrent_migration_runners_serialize_pending_state(tmp_path):
+    database = Database(tmp_path / "concurrent.db")
+    first_body_entered = threading.Event()
+    release_first_body = threading.Event()
+    body_lock = threading.Lock()
+    body_executions = 0
+
+    def migration_body(conn):
+        nonlocal body_executions
+        with body_lock:
+            body_executions += 1
+        conn.execute("CREATE TABLE concurrent_result (id INTEGER)")
+        first_body_entered.set()
+        assert release_first_body.wait(timeout=10)
+
+    migration = Migration("synthetic_concurrent", migration_body)
+
+    def run_migrations():
+        with database.connect() as conn:
+            apply_migrations(conn, [migration])
+
+    with ThreadPoolExecutor(max_workers=2) as executor:
+        first = executor.submit(run_migrations)
+        assert first_body_entered.wait(timeout=10)
+        second = executor.submit(run_migrations)
+        assert not second.done()
+        release_first_body.set()
+        first.result(timeout=10)
+        second.result(timeout=10)
+
+    with database.connect() as conn:
+        assert body_executions == 1
+        assert (
+            conn.execute(
+                "SELECT COUNT(*) FROM schema_migrations "
+                "WHERE migration_id = 'synthetic_concurrent'"
+            ).fetchone()[0]
+            == 1
+        )
+        assert (
+            conn.execute(
+                "SELECT COUNT(*) FROM sqlite_master "
+                "WHERE type = 'table' AND name = 'concurrent_result'"
+            ).fetchone()[0]
+            == 1
+        )
+        assert conn.execute("PRAGMA integrity_check").fetchone()[0] == "ok"
+        assert conn.execute("PRAGMA foreign_key_check").fetchall() == []
