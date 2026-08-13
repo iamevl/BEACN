@@ -38,6 +38,9 @@ from beacn.database.schema import (
     initialise_password_recovery_schema,
     initialise_security_settings_schema,
 )
+from beacn.management import ManagementRepository
+from beacn.security import CredentialCipher, load_credential_key_ring
+from beacn.security.access_log import SanitizedAccessLogRequestHandler
 from beacn.services.health import get_health_summary
 from beacn.relationships.manager import RelationshipManager
 from beacn.relationships.providers.generic import GenericProvider
@@ -95,6 +98,7 @@ from beacn.web.api.monitoring import (
     create_monitoring_blueprint,
 )
 from beacn.web.api.operations import operations_blueprint
+from beacn.web.api.management import create_management_blueprint
 
 from beacn.runtime import (
     database,
@@ -733,6 +737,18 @@ def require_authentication():
 
     if not has_users:
         if path.startswith("/api/"):
+            if path.startswith("/api/management/"):
+                return jsonify({
+                    "ok": False,
+                    "error": {
+                        "code": "unauthenticated",
+                        "message": (
+                            "BEACN administrator setup is required."
+                        ),
+                    },
+                    "setup_required": True,
+                }), 401
+
             return jsonify({
                 "ok": False,
                 "error": (
@@ -757,6 +773,15 @@ def require_authentication():
         return None
 
     if path.startswith("/api/"):
+        if path.startswith("/api/management/"):
+            return jsonify({
+                "ok": False,
+                "error": {
+                    "code": "unauthenticated",
+                    "message": "Authentication required.",
+                },
+            }), 401
+
         return jsonify({
             "ok": False,
             "error": (
@@ -770,6 +795,20 @@ def require_authentication():
             next=request.full_path,
         )
     )
+
+
+app.register_blueprint(
+    create_management_blueprint(
+        repository=lambda: ManagementRepository(
+            db,
+            CredentialCipher(
+                load_credential_key_ring()
+            ),
+        ),
+        current_user=_current_auth_user,
+        csrf_token=_csrf_token,
+    )
+)
 
 
 @app.route(
@@ -3558,4 +3597,9 @@ if __name__ == "__main__":
     init_db()
     threading.Thread(target=scan_network, daemon=True).start()
     threading.Thread(target=collect_agent_metrics, daemon=True).start()
-    app.run(host="0.0.0.0", port=APP_PORT, threaded=True)
+    app.run(
+        host="0.0.0.0",
+        port=APP_PORT,
+        threaded=True,
+        request_handler=SanitizedAccessLogRequestHandler,
+    )

@@ -345,6 +345,7 @@ class ManagementRepository:
         enabled: bool = False,
         credential_id: str | None = None,
         connection_timeout_seconds: int = 5,
+        capabilities: Mapping[str, bool] | None = None,
     ) -> ManagementSource:
         if not isinstance(enabled, bool):
             raise ManagementValidationError(
@@ -387,6 +388,7 @@ class ManagementRepository:
                         now,
                     ),
                 )
+                self._set_capabilities(conn, source_id, capabilities or {})
         except sqlite3.IntegrityError as exc:
             raise ManagementValidationError(
                 "An equivalent management source already exists."
@@ -459,6 +461,7 @@ class ManagementRepository:
             "enabled",
             "credential_id",
             "connection_timeout_seconds",
+            "capabilities",
         }
         if not changes or set(changes) - allowed:
             raise ManagementValidationError("Management source update is invalid.")
@@ -472,6 +475,7 @@ class ManagementRepository:
                 if row is None:
                     raise ManagementNotFoundError("Management source was not found.")
                 current = dict(row)
+                capability_changes = changes.pop("capabilities", None)
                 current.update(changes)
                 if not isinstance(current["enabled"], (bool, int)) or current[
                     "enabled"
@@ -524,6 +528,8 @@ class ManagementRepository:
                         source_id,
                     ),
                 )
+                if capability_changes is not None:
+                    self._set_capabilities(conn, source_id, capability_changes)
         except sqlite3.IntegrityError as exc:
             raise ManagementValidationError(
                 "An equivalent management source already exists."
@@ -601,6 +607,33 @@ class ManagementRepository:
                 (source_id, capability, int(bool(enabled)), now, now),
             )
         return self.get_source(source_id)
+
+    @staticmethod
+    def _set_capabilities(
+        conn: sqlite3.Connection,
+        source_id: str,
+        capabilities: Mapping[str, bool],
+    ) -> None:
+        if not isinstance(capabilities, Mapping):
+            raise ManagementValidationError("Management capabilities are invalid.")
+        if any(capability not in CAPABILITIES for capability in capabilities):
+            raise ManagementValidationError("Management capability is invalid.")
+        if any(not isinstance(enabled, bool) for enabled in capabilities.values()):
+            raise ManagementValidationError("Management capability state is invalid.")
+
+        now = _utc_now()
+        for capability, enabled in capabilities.items():
+            conn.execute(
+                """
+                INSERT INTO management_source_capabilities (
+                    source_id, capability, enabled, created_at, updated_at
+                ) VALUES (?, ?, ?, ?, ?)
+                ON CONFLICT(source_id, capability) DO UPDATE SET
+                    enabled = excluded.enabled,
+                    updated_at = excluded.updated_at
+                """,
+                (source_id, capability, int(enabled), now, now),
+            )
 
     def delete_source(self, source_id: str) -> None:
         with self._connect() as conn:
