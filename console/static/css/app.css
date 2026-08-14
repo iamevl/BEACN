@@ -5129,6 +5129,60 @@ button.relationship-path-device:hover {
   display: none;
 }
 
+.management-capability-state {
+  display: grid;
+  grid-template-columns: auto auto;
+  justify-content: start;
+  align-items: center;
+  gap: 9px;
+}
+
+.management-inventory-panel {
+  grid-column: 1 / -1;
+  width: 100%;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: 9px;
+  background: var(--beacn-subtle-fill);
+}
+
+.management-inventory-panel summary {
+  cursor: pointer;
+  color: var(--muted);
+  font-size: .84rem;
+  font-weight: 650;
+}
+
+.management-inventory-panel > .settings-actions {
+  margin-top: 12px;
+}
+
+.management-interface-results {
+  display: grid;
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.management-interface-row {
+  display: grid;
+  gap: 5px;
+  padding: 9px 0;
+  border-top: 1px solid var(--border);
+}
+
+.management-interface-identity {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.management-interface-row small,
+.management-interface-addresses {
+  color: var(--muted);
+  overflow-wrap: anywhere;
+}
+
 .management-review-source {
   font-weight: 650;
 }

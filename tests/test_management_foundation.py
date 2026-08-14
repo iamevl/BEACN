@@ -553,7 +553,10 @@ def test_migration_clean_existing_idempotent_and_schema_equivalence(tmp_path):
 
     assert clean_signature == upgraded_signature
     assert applied_once == applied_twice
-    assert [row[0] for row in applied_once] == ["20260813_01_management_foundation"]
+    assert [row[0] for row in applied_once] == [
+        "20260813_01_management_foundation",
+        "20260814_01_management_interface_inventory",
+    ]
 
 
 def test_failed_migration_rolls_back_and_is_not_recorded(tmp_path):

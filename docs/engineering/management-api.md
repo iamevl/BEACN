@@ -45,6 +45,8 @@ PUT    /api/management/credentials/<credential_id>
 DELETE /api/management/credentials/<credential_id>
 POST   /api/management/sources/<source_id>/test
 POST   /api/management/sources/<source_id>/trust
+GET    /api/management/sources/<source_id>/interface-inventory
+POST   /api/management/sources/<source_id>/collect/interface-inventory
 ```
 
 Creating or enabling a management source records administrator intent only.
@@ -87,3 +89,30 @@ for management-source tests.
 The Settings management forms keep secrets write-only. Secret fields are blank
 for rotation and cleared after submission. Secret values are not placed in URLs,
 storage, data attributes, or logs.
+
+## Controlled interface inventory collection
+
+R2D.4A adds an administrator-only, CSRF-protected semantic collection action.
+It accepts only an empty JSON object and requires both an enabled source and an
+explicitly enabled `interface_inventory` capability. Enabling the capability
+does not initiate collection. Collection attempts are limited to three per
+administrator and source per 60 seconds.
+
+The SSH collector permits exactly two fixed operations: `ip -o link show` and
+`ip -o address show`. Neither accepts API or administrator input. The service
+verifies persisted host identity before credential decryption, and the
+collector verifies it again before authentication. Commands have bounded time
+and output, no interactive shell is opened, and channels, transport and socket
+are always closed. Raw output and credential material are neither returned nor
+persisted.
+
+Successful output is normalized into `management_interface_inventory` and
+atomically replaces the source's prior snapshot. Interface UUIDs stay stable
+for unchanged source/name pairs; interfaces absent from a successful refresh
+are removed. Parsing, transport, or transaction failure retains the last
+successful snapshot. `management_collection_status` records successful time
+and item count.
+
+Interface inventory is participant metadata, not attachment evidence. It is
+not written to `observations`, no relationship provider consumes it, and it
+has no topology placement authority.

@@ -108,8 +108,67 @@ def _management_foundation(conn: sqlite3.Connection) -> None:
     """)
 
 
+def _management_interface_inventory(conn: sqlite3.Connection) -> None:
+    conn.execute("""
+        CREATE TABLE management_interface_inventory (
+            id TEXT PRIMARY KEY,
+            source_id TEXT NOT NULL,
+            participant_kind TEXT NOT NULL CHECK (
+                participant_kind IN ('device', 'infrastructure_object')
+            ),
+            participant_id TEXT NOT NULL,
+            interface_name TEXT NOT NULL,
+            interface_index INTEGER,
+            mac_address TEXT,
+            admin_state TEXT,
+            operational_state TEXT,
+            mtu INTEGER,
+            addresses_json TEXT NOT NULL,
+            interface_kind TEXT,
+            collected_at TEXT NOT NULL,
+            adapter_type TEXT NOT NULL,
+            provenance TEXT NOT NULL,
+            UNIQUE(source_id, interface_name),
+            FOREIGN KEY(source_id)
+                REFERENCES management_sources(id)
+                ON DELETE CASCADE
+        )
+    """)
+    conn.execute("""
+        CREATE INDEX idx_management_interfaces_participant
+        ON management_interface_inventory(participant_kind, participant_id)
+    """)
+    conn.execute("""
+        CREATE INDEX idx_management_interfaces_collected
+        ON management_interface_inventory(source_id, collected_at)
+    """)
+    conn.execute("""
+        CREATE TABLE management_collection_status (
+            source_id TEXT NOT NULL,
+            capability TEXT NOT NULL CHECK (
+                capability IN (
+                    'interface_inventory',
+                    'bridge_fdb',
+                    'wireless_associations',
+                    'neighbours'
+                )
+            ),
+            status TEXT NOT NULL CHECK (status IN ('success', 'failed')),
+            item_count INTEGER NOT NULL DEFAULT 0 CHECK (item_count >= 0),
+            collected_at TEXT NOT NULL,
+            error_category TEXT,
+            updated_at TEXT NOT NULL,
+            PRIMARY KEY(source_id, capability),
+            FOREIGN KEY(source_id)
+                REFERENCES management_sources(id)
+                ON DELETE CASCADE
+        )
+    """)
+
+
 DEFAULT_MIGRATIONS = (
     Migration("20260813_01_management_foundation", _management_foundation),
+    Migration("20260814_01_management_interface_inventory", _management_interface_inventory),
 )
 
 

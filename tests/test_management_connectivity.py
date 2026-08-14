@@ -493,11 +493,49 @@ def test_management_source_cards_show_persisted_state_not_add_form_state():
     assert "detail('Credential', credential)" in script
     assert "participantLabels.get" in script
     assert "sourceForm.elements.management_address.value = item.management_address" in script
-    assert "sourceForm.elements.enabled.checked = item.enabled" in script
+    assert "sourceForm.elements.enabled.checked = Boolean(item.enabled)" in script
     assert "sourceFormTitle.textContent = `Editing ${participant}`" in script
     assert "sourceFormState.textContent = 'Editing persisted source'" in script
     assert "sourceFormTitle.textContent = 'New source configuration'" in script
     assert "Operational source state below always comes from persisted source data." in template
+
+
+def test_management_source_edit_and_save_fail_closed_in_the_browser():
+    script = Path("console/static/js/management-settings.js").read_text()
+
+    populate = script.split("function populateSourceForm", 1)[1].split(
+        "function editSource", 1
+    )[0]
+    for field in (
+        "source_id",
+        "participant",
+        "adapter_type",
+        "management_address",
+        "management_port",
+        "enabled",
+        "credential_id",
+        "connection_timeout_seconds",
+    ):
+        assert f"sourceForm.elements.{field}" in populate
+    assert "item.capabilities?.[input.value]" in populate
+    assert "editingSourceId = item.id" in script
+    assert "requestAnimationFrame" in script
+    assert "const id = editingSourceId || sourceForm.elements.source_id.value" in script
+    assert "sourceForm.addEventListener('invalid'" in script
+    assert "The source was not saved." in script
+    assert "could not reach the server. No saved state was confirmed." in script
+    assert "unexpected response. No saved state was confirmed." in script
+    assert "server did not confirm the management request" in script
+
+    submit = script.split("sourceForm.addEventListener('submit'", 1)[1].split(
+        "sourceForm.addEventListener('invalid'", 1
+    )[0]
+    assert "method: 'PATCH'" in submit
+    assert "saved.id !== id" in submit
+    assert submit.find("await refresh();") < submit.find("resetSourceForm();")
+    assert "Source saved and refreshed from persisted state." in submit
+    assert "/collect/" not in submit
+    assert "/test" not in submit
 
 
 def test_management_ui_presents_trusted_identity_and_compact_safe_credentials():

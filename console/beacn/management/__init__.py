@@ -3,6 +3,7 @@
 from .repository import (
     CAPABILITIES,
     ManagementCredential,
+    ManagementInterface,
     ManagementNotFoundError,
     ManagementRepository,
     ManagementSource,
@@ -13,6 +14,7 @@ from .repository import (
 __all__ = [
     "CAPABILITIES",
     "ManagementCredential",
+    "ManagementInterface",
     "ManagementNotFoundError",
     "ManagementRepository",
     "ManagementSource",

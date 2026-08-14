@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import ipaddress
+import json
 import re
 import sqlite3
 from collections.abc import Callable, Mapping
@@ -85,6 +86,30 @@ class ManagementSource:
         value = asdict(self)
         value["capabilities"] = dict(self.capabilities)
         value["ssh_trusted"] = self.ssh_trusted
+        return value
+
+
+@dataclass(frozen=True, slots=True)
+class ManagementInterface:
+    id: str
+    source_id: str
+    participant_kind: str
+    participant_id: str
+    interface_name: str
+    interface_index: int | None
+    mac_address: str | None
+    admin_state: str | None
+    operational_state: str | None
+    mtu: int | None
+    addresses: tuple[str, ...]
+    interface_kind: str | None
+    collected_at: str
+    adapter_type: str
+    provenance: str
+
+    def to_dict(self) -> dict[str, object]:
+        value = asdict(self)
+        value["addresses"] = list(self.addresses)
         return value
 
 
@@ -650,3 +675,139 @@ class ManagementRepository:
 
     def find_orphaned_sources(self) -> list[ManagementSource]:
         return [source for source in self.list_sources() if source.orphaned]
+
+    @staticmethod
+    def _interface(row: sqlite3.Row) -> ManagementInterface:
+        try:
+            addresses = tuple(json.loads(row["addresses_json"]))
+        except (json.JSONDecodeError, TypeError):
+            addresses = ()
+        return ManagementInterface(
+            id=row["id"],
+            source_id=row["source_id"],
+            participant_kind=row["participant_kind"],
+            participant_id=row["participant_id"],
+            interface_name=row["interface_name"],
+            interface_index=row["interface_index"],
+            mac_address=row["mac_address"],
+            admin_state=row["admin_state"],
+            operational_state=row["operational_state"],
+            mtu=row["mtu"],
+            addresses=addresses,
+            interface_kind=row["interface_kind"],
+            collected_at=row["collected_at"],
+            adapter_type=row["adapter_type"],
+            provenance=row["provenance"],
+        )
+
+    def list_interface_inventory(self, source_id: str) -> list[ManagementInterface]:
+        with self._connect() as conn:
+            rows = conn.execute(
+                """
+                SELECT * FROM management_interface_inventory
+                WHERE source_id = ?
+                ORDER BY COALESCE(interface_index, 2147483647), interface_name
+                """,
+                (source_id,),
+            ).fetchall()
+        return [self._interface(row) for row in rows]
+
+    def interface_inventory_status(self, source_id: str) -> dict[str, object] | None:
+        with self._connect() as conn:
+            row = conn.execute(
+                """
+                SELECT status, item_count, collected_at, error_category
+                FROM management_collection_status
+                WHERE source_id = ? AND capability = 'interface_inventory'
+                """,
+                (source_id,),
+            ).fetchone()
+        return dict(row) if row else None
+
+    def replace_interface_inventory(
+        self,
+        source: ManagementSource,
+        interfaces,
+        *,
+        collected_at: str,
+    ) -> list[ManagementInterface]:
+        """Atomically replace one source snapshot; failed writes retain the old one."""
+        names = [item.interface_name for item in interfaces]
+        if len(names) != len(set(names)):
+            raise ManagementValidationError("Interface inventory contains duplicates.")
+        now = _utc_now()
+        with self._connect() as conn:
+            existing = {
+                row["interface_name"]: row["id"]
+                for row in conn.execute(
+                    """
+                    SELECT id, interface_name FROM management_interface_inventory
+                    WHERE source_id = ?
+                    """,
+                    (source.id,),
+                ).fetchall()
+            }
+            for item in interfaces:
+                interface_id = existing.get(item.interface_name, str(uuid4()))
+                conn.execute(
+                    """
+                    INSERT INTO management_interface_inventory (
+                        id, source_id, participant_kind, participant_id,
+                        interface_name, interface_index, mac_address,
+                        admin_state, operational_state, mtu, addresses_json,
+                        interface_kind, collected_at, adapter_type, provenance
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    ON CONFLICT(source_id, interface_name) DO UPDATE SET
+                        participant_kind = excluded.participant_kind,
+                        participant_id = excluded.participant_id,
+                        interface_index = excluded.interface_index,
+                        mac_address = excluded.mac_address,
+                        admin_state = excluded.admin_state,
+                        operational_state = excluded.operational_state,
+                        mtu = excluded.mtu,
+                        addresses_json = excluded.addresses_json,
+                        interface_kind = excluded.interface_kind,
+                        collected_at = excluded.collected_at,
+                        adapter_type = excluded.adapter_type,
+                        provenance = excluded.provenance
+                    """,
+                    (
+                        interface_id, source.id, source.participant_kind,
+                        source.participant_id, item.interface_name,
+                        item.interface_index, item.mac_address, item.admin_state,
+                        item.operational_state, item.mtu,
+                        json.dumps(list(item.addresses), separators=(",", ":")),
+                        item.interface_kind, collected_at, source.adapter_type,
+                        item.provenance,
+                    ),
+                )
+            if names:
+                placeholders = ",".join("?" for _ in names)
+                conn.execute(
+                    f"""
+                    DELETE FROM management_interface_inventory
+                    WHERE source_id = ? AND interface_name NOT IN ({placeholders})
+                    """,
+                    (source.id, *names),
+                )
+            else:
+                conn.execute(
+                    "DELETE FROM management_interface_inventory WHERE source_id = ?",
+                    (source.id,),
+                )
+            conn.execute(
+                """
+                INSERT INTO management_collection_status (
+                    source_id, capability, status, item_count, collected_at,
+                    error_category, updated_at
+                ) VALUES (?, 'interface_inventory', 'success', ?, ?, NULL, ?)
+                ON CONFLICT(source_id, capability) DO UPDATE SET
+                    status = excluded.status,
+                    item_count = excluded.item_count,
+                    collected_at = excluded.collected_at,
+                    error_category = NULL,
+                    updated_at = excluded.updated_at
+                """,
+                (source.id, len(interfaces), collected_at, now),
+            )
+        return self.list_interface_inventory(source.id)

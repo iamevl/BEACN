@@ -16,6 +16,8 @@
   let csrfToken = '';
   let credentials = [];
   let sources = [];
+  let editingSourceId = '';
+  let editingSourceSnapshot = null;
   const participantLabels = new Map();
   const candidates = new Map();
 
@@ -37,9 +39,22 @@
   async function api(path, options = {}) {
     const headers = {'Content-Type': 'application/json'};
     if (options.method && options.method !== 'GET') headers['X-CSRF-Token'] = csrfToken;
-    const response = await fetch(path, {...options, headers});
-    const body = response.status === 204 ? {ok: true} : await response.json();
+    let response;
+    try {
+      response = await fetch(path, {...options, headers});
+    } catch (_error) {
+      throw new Error('The management request could not reach the server. No saved state was confirmed.');
+    }
+    let body;
+    try {
+      body = response.status === 204 ? {ok: true} : await response.json();
+    } catch (_error) {
+      throw new Error('The server returned an unexpected response. No saved state was confirmed.');
+    }
     if (!response.ok) throw new Error(body?.error?.message || 'Management request failed.');
+    if (!body || body.ok !== true) {
+      throw new Error('The server did not confirm the management request. No saved state was confirmed.');
+    }
     return body;
   }
 
@@ -149,6 +164,8 @@
 
   function resetSourceForm() {
     sourceForm.reset();
+    editingSourceId = '';
+    editingSourceSnapshot = null;
     sourceForm.elements.source_id.value = '';
     sourceForm.elements.participant.disabled = false;
     sourceForm.elements.adapter_type.disabled = false;
@@ -157,6 +174,42 @@
     sourceFormTitle.textContent = 'New source configuration';
     sourceFormState.textContent = 'New';
     sourceFormState.classList.remove('management-form-state-editing');
+  }
+
+  function populateSourceForm(item) {
+    sourceForm.elements.source_id.value = item.id;
+    sourceForm.elements.participant.value = `${item.participant_kind}:${item.participant_id}`;
+    sourceForm.elements.adapter_type.value = item.adapter_type;
+    sourceForm.elements.management_address.value = item.management_address;
+    sourceForm.elements.management_port.value = item.management_port ?? '';
+    sourceForm.elements.enabled.checked = Boolean(item.enabled);
+    sourceForm.elements.credential_id.value = item.credential_id || '';
+    sourceForm.elements.connection_timeout_seconds.value = item.connection_timeout_seconds;
+    sourceForm.querySelectorAll('input[name="capability"]').forEach(input => {
+      input.checked = Boolean(item.capabilities?.[input.value]);
+    });
+  }
+
+  function editSource(item, participant) {
+    resetSourceForm();
+    editingSourceId = item.id;
+    editingSourceSnapshot = item;
+    populateSourceForm(item);
+    sourceForm.elements.participant.disabled = true;
+    sourceForm.elements.adapter_type.disabled = true;
+    document.getElementById('management-source-cancel').hidden = false;
+    sourceFormTitle.textContent = `Editing ${participant}`;
+    sourceFormState.textContent = 'Editing persisted source';
+    sourceFormState.classList.add('management-form-state-editing');
+    sourceForm.scrollIntoView({behavior: 'smooth'});
+
+    // Browsers and password managers may restore form controls after a click.
+    // Reassert the persisted snapshot once, before an administrator can edit it.
+    requestAnimationFrame(() => {
+      if (editingSourceId === item.id && editingSourceSnapshot === item) {
+        populateSourceForm(item);
+      }
+    });
   }
 
   function sourceEndpoint(item) {
@@ -173,6 +226,34 @@
 
   function invalidateCandidate(sourceId) {
     candidates.delete(sourceId);
+  }
+
+  function renderInterfaceResults(container, interfaces) {
+    container.replaceChildren();
+    if (!interfaces.length) {
+      container.append(element('p', 'No interfaces were returned.', 'muted'));
+      return;
+    }
+    interfaces.forEach(item => {
+      const row = element('div', undefined, 'management-interface-row');
+      const identity = element('div', undefined, 'management-interface-identity');
+      identity.append(
+        element('strong', item.interface_name),
+        element('span', item.interface_kind || 'unknown type', 'badge'),
+      );
+      const metadata = element('small', [
+        item.interface_index != null ? `Index ${item.interface_index}` : null,
+        item.operational_state ? `Operational ${item.operational_state}` : null,
+        item.admin_state ? `Administrative ${item.admin_state}` : null,
+        item.mtu != null ? `MTU ${item.mtu}` : null,
+        item.mac_address || null,
+      ].filter(Boolean).join(' · '));
+      row.append(identity, metadata);
+      if (item.addresses?.length) {
+        row.append(element('code', item.addresses.join(' · '), 'management-interface-addresses'));
+      }
+      container.append(row);
+    });
   }
 
   function renderSources() {
@@ -233,6 +314,45 @@
         }
         card.append(trustPanel);
       }
+      const interfaceEnabled = Boolean(item.capabilities.interface_inventory);
+      const capabilityPanel = element('div', undefined, 'management-capability-state');
+      capabilityPanel.append(
+        element('strong', 'Interface inventory'),
+        element('span', interfaceEnabled ? 'Enabled' : 'Disabled', 'badge'),
+      );
+      if (interfaceEnabled) {
+        const inventory = element('details', undefined, 'management-inventory-panel');
+        const summary = element(
+          'summary',
+          item.interface_inventory
+            ? `Last collection: ${item.interface_inventory.collected_at} · ${item.interface_inventory.item_count} interfaces`
+            : 'No interface inventory collected',
+        );
+        const inventoryActions = element('div', undefined, 'settings-actions management-entry-actions');
+        const inventoryResult = element('div', undefined, 'management-interface-results');
+        inventoryActions.append(
+          actionButton('Collect interface inventory', async () => {
+            inventoryResult.textContent = 'Collecting…';
+            try {
+              const body = await api(`/api/management/sources/${item.id}/collect/interface-inventory`, {
+                method: 'POST', body: '{}',
+              });
+              summary.textContent = `${body.result.message} · ${body.result.count} interfaces · ${body.result.collected_at}`;
+              renderInterfaceResults(inventoryResult, body.result.interfaces);
+            } catch (error) { inventoryResult.textContent = error.message; }
+          }),
+          actionButton('Inspect saved inventory', async () => {
+            inventoryResult.textContent = 'Loading…';
+            try {
+              const body = await api(`/api/management/sources/${item.id}/interface-inventory`);
+              renderInterfaceResults(inventoryResult, body.interfaces);
+            } catch (error) { inventoryResult.textContent = error.message; }
+          }),
+        );
+        inventory.append(summary, inventoryActions, inventoryResult);
+        capabilityPanel.append(inventory);
+      }
+      card.append(capabilityPanel);
       const result = element('div', undefined, 'management-result');
       const actions = element('div', undefined, 'settings-actions management-entry-actions');
       const review = element('section', undefined, 'management-trust-review');
@@ -285,25 +405,7 @@
         actionButton('Edit', () => {
           invalidateCandidate(item.id);
           review.hidden = true;
-          resetSourceForm();
-          sourceForm.elements.source_id.value = item.id;
-          sourceForm.elements.participant.value = `${item.participant_kind}:${item.participant_id}`;
-          sourceForm.elements.adapter_type.value = item.adapter_type;
-          sourceForm.elements.management_address.value = item.management_address;
-          sourceForm.elements.management_port.value = item.management_port || '';
-          sourceForm.elements.enabled.checked = item.enabled;
-          sourceForm.elements.credential_id.value = item.credential_id || '';
-          sourceForm.elements.connection_timeout_seconds.value = item.connection_timeout_seconds;
-          sourceForm.querySelectorAll('input[name="capability"]').forEach(input => {
-            input.checked = Boolean(item.capabilities[input.value]);
-          });
-          sourceForm.elements.participant.disabled = true;
-          sourceForm.elements.adapter_type.disabled = true;
-          document.getElementById('management-source-cancel').hidden = false;
-          sourceFormTitle.textContent = `Editing ${participant}`;
-          sourceFormState.textContent = 'Editing persisted source';
-          sourceFormState.classList.add('management-form-state-editing');
-          sourceForm.scrollIntoView({behavior: 'smooth'});
+          editSource(item, participant);
         }),
         actionButton('Test', async () => {
           result.textContent = 'Testing…';
@@ -408,22 +510,35 @@
   });
   sourceForm.addEventListener('submit', async event => {
     event.preventDefault();
-    const id = sourceForm.elements.source_id.value;
+    const id = editingSourceId || sourceForm.elements.source_id.value;
     const payload = sourcePayload();
+    show(id ? 'Saving persisted source…' : 'Creating management source…');
     try {
+      let saved;
       if (id) {
         invalidateCandidate(id);
         delete payload.participant_kind;
         delete payload.participant_id;
         delete payload.adapter_type;
-        await api(`/api/management/sources/${id}`, {method: 'PATCH', body: JSON.stringify(payload)});
+        const body = await api(`/api/management/sources/${id}`, {method: 'PATCH', body: JSON.stringify(payload)});
+        saved = body.source;
+        if (!saved || saved.id !== id) {
+          throw new Error('The server did not confirm the persisted source identity.');
+        }
       } else {
-        await api('/api/management/sources', {method: 'POST', body: JSON.stringify(payload)});
+        saved = (await api('/api/management/sources', {
+          method: 'POST', body: JSON.stringify(payload),
+        })).source;
       }
-      resetSourceForm();
       await refresh();
+      resetSourceForm();
+      show(id ? 'Source saved and refreshed from persisted state.' : 'Source created and refreshed from persisted state.');
     } catch (error) { show(error.message, true); }
   });
+  sourceForm.addEventListener('invalid', event => {
+    const label = event.target.closest('label')?.textContent?.trim() || event.target.name || 'Source field';
+    show(`${label} is invalid or incomplete. The source was not saved.`, true);
+  }, true);
   document.getElementById('management-credential-cancel').addEventListener('click', resetCredentialForm);
   document.getElementById('management-source-cancel').addEventListener('click', resetSourceForm);
 

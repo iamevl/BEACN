@@ -43,6 +43,8 @@ from beacn.management.connectivity import (
     ConnectivityRateLimiter,
     ManagementConnectivityService,
 )
+from beacn.management.collection import ManagementCollectionService
+from beacn.management.collectors import SSHInterfaceInventoryCollector
 from beacn.security import credential_cipher_from_environment
 from beacn.security.access_log import SanitizedAccessLogRequestHandler
 from beacn.services.health import get_health_summary
@@ -196,6 +198,7 @@ app.permanent_session_lifetime = timedelta(
 )
 
 management_connectivity_limiter = ConnectivityRateLimiter()
+management_collection_limiter = ConnectivityRateLimiter(limit=3, window_seconds=60)
 
 app.register_blueprint(
     create_monitoring_blueprint(
@@ -818,6 +821,14 @@ app.register_blueprint(
             )
         ),
         connectivity_limiter=management_connectivity_limiter,
+        collection_service=lambda: ManagementCollectionService(
+            ManagementRepository(
+                db,
+                credential_cipher_from_environment(),
+            ),
+            ssh_collector=SSHInterfaceInventoryCollector(),
+        ),
+        collection_limiter=management_collection_limiter,
     )
 )
 

@@ -12,6 +12,7 @@ from beacn.management import (
     ManagementStorageError,
     ManagementValidationError,
 )
+from beacn.management.collection import CollectionError
 from beacn.management.connectivity import ConnectivityError, HostIdentity
 from beacn.security import (
     CredentialCryptoError,
@@ -83,6 +84,7 @@ def _source_payload(repository, source) -> dict[str, object]:
         if credential
         else None
     )
+    payload["interface_inventory"] = repository.interface_inventory_status(source.id)
     return payload
 
 
@@ -101,6 +103,8 @@ def create_management_blueprint(
     csrf_token: Callable,
     connectivity_service: Callable | None = None,
     connectivity_limiter=None,
+    collection_service: Callable | None = None,
+    collection_limiter=None,
 ):
     blueprint = Blueprint("management_api", __name__)
 
@@ -141,6 +145,13 @@ def create_management_blueprint(
             raise ConnectivityError("Management connectivity is unavailable.")
         return connectivity_service()
 
+    def collection():
+        if collection_service is None:
+            raise CollectionError(
+                "collection_unavailable", "Management collection is unavailable."
+            )
+        return collection_service()
+
     def handle_error(exc, action=None, object_id=None):
         if action:
             audit(action, object_id, "failure")
@@ -160,6 +171,15 @@ def create_management_blueprint(
             return _error("conflict", str(exc), 409)
         if isinstance(exc, ConnectivityError):
             return _error("connectivity_failed", "Connectivity test failed safely.", 503)
+        if isinstance(exc, CollectionError):
+            status = 409 if exc.category in {
+                "source_disabled",
+                "capability_disabled",
+                "configuration_invalid",
+                "host_identity_changed",
+                "authentication_failed",
+            } else 503
+            return _error(exc.category, str(exc), status)
         current_app.logger.error(
             "management_audit action=%s outcome=internal_failure object_id=%s",
             action or "unknown",
@@ -375,5 +395,43 @@ def create_management_blueprint(
             return jsonify({"ok": True, "source": _source_payload(repo(), updated)})
         except Exception as exc:  # noqa: BLE001 - sanitized API boundary
             return handle_error(exc, "source_trust", source_id)
+
+    @blueprint.get("/api/management/sources/<source_id>/interface-inventory")
+    def interface_inventory_get(source_id):
+        repository_value = repo()
+        source = repository_value.get_source(source_id)
+        if source is None:
+            return _error("not_found", "Management record was not found.", 404)
+        return jsonify(
+            {
+                "ok": True,
+                "status": repository_value.interface_inventory_status(source_id),
+                "interfaces": [
+                    item.to_dict()
+                    for item in repository_value.list_interface_inventory(source_id)
+                ],
+            }
+        )
+
+    @blueprint.post("/api/management/sources/<source_id>/collect/interface-inventory")
+    def interface_inventory_collect(source_id):
+        payload = _json_object()
+        if payload != {}:
+            return _error("validation_failed", "Collection fields are invalid.", 400)
+        user = current_user()
+        if collection_limiter is not None and not collection_limiter.allow(
+            user["id"], source_id
+        ):
+            audit("interface_inventory_collect", source_id, "rate_limited")
+            return _error("rate_limited", "Collection rate limit exceeded.", 429)
+        source = repo().get_source(source_id)
+        if source is None:
+            return _error("not_found", "Management record was not found.", 404)
+        try:
+            result = collection().collect_interface_inventory(source)
+            audit("interface_inventory_collect", source_id, result.category)
+            return jsonify({"ok": True, "result": result.to_dict()})
+        except Exception as exc:  # noqa: BLE001 - sanitized API boundary
+            return handle_error(exc, "interface_inventory_collect", source_id)
 
     return blueprint
