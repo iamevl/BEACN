@@ -1,0 +1,11 @@
+services:
+  beacn-console:
+    environment:
+      BEACN_ENCRYPTION_KEY_FILE: /run/secrets/beacn-credential-keys
+      BEACN_ENCRYPTION_KEY: ""
+      BEACN_ENCRYPTION_LEGACY_KEYS: ""
+    volumes:
+      - type: bind
+        source: ${BEACN_ENCRYPTION_KEY_HOST_FILE:?Set the protected host key-file path}
+        target: /run/secrets/beacn-credential-keys
+        read_only: true

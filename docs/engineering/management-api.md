@@ -32,6 +32,7 @@ Available routes are:
 
 ```text
 GET    /api/management/csrf
+GET    /api/management/status
 GET    /api/management/sources
 POST   /api/management/sources
 GET    /api/management/sources/<source_id>
@@ -42,6 +43,8 @@ POST   /api/management/credentials
 GET    /api/management/credentials/<credential_id>
 PUT    /api/management/credentials/<credential_id>
 DELETE /api/management/credentials/<credential_id>
+POST   /api/management/sources/<source_id>/test
+POST   /api/management/sources/<source_id>/trust
 ```
 
 Creating or enabling a management source records administrator intent only.
@@ -60,3 +63,27 @@ rate limiting is mandatory before future connectivity or authentication tests.
 BEACN currently uses its existing administrator flag as the authorization
 boundary. A future multi-user model must preserve explicit administrator-only
 authorization for these routes.
+
+## Trust and connectivity
+
+R2D.3 supports explicit, rate-limited SSH and SNMP connectivity checks. These
+checks only validate the configured transport and authentication; they do not
+run SSH commands, walk attachment tables, create observations, enable
+capabilities, or change topology.
+
+The lightweight limiter is held in process memory and keyed by administrator
+and source. It is appropriate for the current single-instance deployment. A
+shared limiter is required before concurrent API replicas are supported.
+
+SSH connectivity fails closed until an administrator reviews and explicitly
+trusts the presented algorithm and SHA-256 fingerprint. Trust re-reads the host
+identity from the configured endpoint. A changed identity blocks authentication
+and requires another explicit trust action. Address or port changes clear trust.
+
+SNMP checks use only standard system identity OIDs with the source's encrypted
+SNMPv2c or SNMPv3 credential. Global SNMP environment credentials are not used
+for management-source tests.
+
+The Settings management forms keep secrets write-only. Secret fields are blank
+for rotation and cleared after submission. Secret values are not placed in URLs,
+storage, data attributes, or logs.

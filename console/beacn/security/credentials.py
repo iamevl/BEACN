@@ -257,3 +257,14 @@ class CredentialCipher:
                 "Management credential payload is invalid."
             ) from None
         return dict(validated["secrets"])
+
+
+def credential_cipher_from_environment(
+    environment: Mapping[str, str] | None = None,
+) -> CredentialCipher:
+    """Return a locked cipher for absent or invalid optional configuration."""
+
+    try:
+        return CredentialCipher(load_credential_key_ring(environment))
+    except CredentialCryptoError:
+        return CredentialCipher(None)

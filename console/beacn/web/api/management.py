@@ -12,6 +12,7 @@ from beacn.management import (
     ManagementStorageError,
     ManagementValidationError,
 )
+from beacn.management.connectivity import ConnectivityError, HostIdentity
 from beacn.security import (
     CredentialCryptoError,
     CredentialKeyUnavailable,
@@ -98,6 +99,8 @@ def create_management_blueprint(
     repository: Callable,
     current_user: Callable,
     csrf_token: Callable,
+    connectivity_service: Callable | None = None,
+    connectivity_limiter=None,
 ):
     blueprint = Blueprint("management_api", __name__)
 
@@ -133,6 +136,11 @@ def create_management_blueprint(
     def repo():
         return repository()
 
+    def connectivity():
+        if connectivity_service is None:
+            raise ConnectivityError("Management connectivity is unavailable.")
+        return connectivity_service()
+
     def handle_error(exc, action=None, object_id=None):
         if action:
             audit(action, object_id, "failure")
@@ -150,6 +158,8 @@ def create_management_blueprint(
             return _error("credential_unavailable", "Credential operation failed.", 409)
         if isinstance(exc, ManagementStorageError):
             return _error("conflict", str(exc), 409)
+        if isinstance(exc, ConnectivityError):
+            return _error("connectivity_failed", "Connectivity test failed safely.", 503)
         current_app.logger.error(
             "management_audit action=%s outcome=internal_failure object_id=%s",
             action or "unknown",
@@ -160,6 +170,16 @@ def create_management_blueprint(
     @blueprint.get("/api/management/csrf")
     def management_csrf():
         return jsonify({"ok": True, "csrf_token": csrf_token()})
+
+    @blueprint.get("/api/management/status")
+    def management_status():
+        return jsonify(
+            {
+                "ok": True,
+                "encryption_available": repo().encryption_available,
+                "supported_adapters": ["snmp", "ssh"],
+            }
+        )
 
     @blueprint.get("/api/management/credentials")
     def credential_list():
@@ -290,5 +310,70 @@ def create_management_blueprint(
             return "", 204
         except Exception as exc:  # noqa: BLE001 - sanitized API boundary
             return handle_error(exc, "source_delete", source_id)
+
+    @blueprint.post("/api/management/sources/<source_id>/test")
+    def source_test(source_id):
+        payload = _json_object()
+        if payload != {}:
+            return _error("validation_failed", "Connectivity test fields are invalid.", 400)
+        user = current_user()
+        if connectivity_limiter is not None and not connectivity_limiter.allow(
+            user["id"], source_id
+        ):
+            audit("source_test", source_id, "rate_limited")
+            return _error("rate_limited", "Connectivity test rate limit exceeded.", 429)
+        source = repo().get_source(source_id)
+        if source is None:
+            return _error("not_found", "Management record was not found.", 404)
+        try:
+            result = connectivity().test(source)
+            audit("source_test", source_id, result.category)
+            return jsonify({"ok": True, "result": result.to_dict()})
+        except Exception as exc:  # noqa: BLE001 - sanitized API boundary
+            return handle_error(exc, "source_test", source_id)
+
+    @blueprint.post("/api/management/sources/<source_id>/trust")
+    def source_trust(source_id):
+        payload = _json_object()
+        if payload is None or set(payload) != {"algorithm", "fingerprint"}:
+            return _error("validation_failed", "SSH trust fields are invalid.", 400)
+        user = current_user()
+        if connectivity_limiter is not None and not connectivity_limiter.allow(
+            user["id"], source_id
+        ):
+            audit("source_trust", source_id, "rate_limited")
+            return _error("rate_limited", "Connectivity test rate limit exceeded.", 429)
+        source = repo().get_source(source_id)
+        if source is None:
+            return _error("not_found", "Management record was not found.", 404)
+        try:
+            requested = HostIdentity(
+                str(payload["algorithm"] or "").strip(),
+                str(payload["fingerprint"] or "").strip(),
+            )
+            presented = connectivity().candidate_identity(source)
+            if requested != presented:
+                audit("source_trust", source_id, "host_identity_changed")
+                return jsonify(
+                    {
+                        "ok": True,
+                        "result": {
+                            "category": "host_identity_changed",
+                            "message": "SSH host identity does not match.",
+                            "expected": requested.to_dict(),
+                            "presented": presented.to_dict(),
+                        },
+                    }
+                ), 409
+            updated = repo().set_ssh_trust(
+                source_id,
+                algorithm=presented.algorithm,
+                fingerprint=presented.fingerprint,
+                trusted_by=user["id"],
+            )
+            audit("source_trust", source_id)
+            return jsonify({"ok": True, "source": _source_payload(repo(), updated)})
+        except Exception as exc:  # noqa: BLE001 - sanitized API boundary
+            return handle_error(exc, "source_trust", source_id)
 
     return blueprint

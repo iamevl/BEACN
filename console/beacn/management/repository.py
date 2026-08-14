@@ -125,6 +125,10 @@ class ManagementRepository:
         self._connect = connect
         self._cipher = cipher
 
+    @property
+    def encryption_available(self) -> bool:
+        return self._cipher.available
+
     @staticmethod
     def _credential(row: sqlite3.Row) -> ManagementCredential:
         return ManagementCredential(

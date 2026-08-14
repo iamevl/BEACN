@@ -7,6 +7,7 @@ from .credentials import (
     CredentialValidationError,
     EncryptedCredential,
     FernetKeyRing,
+    credential_cipher_from_environment,
     load_credential_key_ring,
 )
 
@@ -17,5 +18,6 @@ __all__ = [
     "CredentialValidationError",
     "EncryptedCredential",
     "FernetKeyRing",
+    "credential_cipher_from_environment",
     "load_credential_key_ring",
 ]

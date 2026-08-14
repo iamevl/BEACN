@@ -39,7 +39,11 @@ from beacn.database.schema import (
     initialise_security_settings_schema,
 )
 from beacn.management import ManagementRepository
-from beacn.security import CredentialCipher, load_credential_key_ring
+from beacn.management.connectivity import (
+    ConnectivityRateLimiter,
+    ManagementConnectivityService,
+)
+from beacn.security import credential_cipher_from_environment
 from beacn.security.access_log import SanitizedAccessLogRequestHandler
 from beacn.services.health import get_health_summary
 from beacn.relationships.manager import RelationshipManager
@@ -190,6 +194,8 @@ app.config.update(
 app.permanent_session_lifetime = timedelta(
     hours=8
 )
+
+management_connectivity_limiter = ConnectivityRateLimiter()
 
 app.register_blueprint(
     create_monitoring_blueprint(
@@ -801,12 +807,17 @@ app.register_blueprint(
     create_management_blueprint(
         repository=lambda: ManagementRepository(
             db,
-            CredentialCipher(
-                load_credential_key_ring()
-            ),
+            credential_cipher_from_environment(),
         ),
         current_user=_current_auth_user,
         csrf_token=_csrf_token,
+        connectivity_service=lambda: ManagementConnectivityService(
+            ManagementRepository(
+                db,
+                credential_cipher_from_environment(),
+            )
+        ),
+        connectivity_limiter=management_connectivity_limiter,
     )
 )
 

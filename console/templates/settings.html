@@ -71,6 +71,7 @@
       <a href="#network">Network</a>
       <a href="#relationships">Relationships</a>
       <a href="#integrations">Integrations</a>
+      <a href="#management-sources">Management Sources</a>
       <a href="#security">Security</a>
       <a href="#users">Users</a>
       <a href="#agents">Agents</a>
@@ -513,6 +514,114 @@
 
         </article>
 
+      </div>
+    </section>
+
+
+    <section
+      class="settings-group"
+      id="management-sources"
+    >
+      <div class="settings-group-heading">
+        <span>⌘</span>
+        <div>
+          <h2>Management Sources</h2>
+          <p class="muted">
+            Configure protected credentials and explicitly managed endpoints.
+            Connectivity tests never activate discovery collection.
+          </p>
+        </div>
+      </div>
+
+      <div id="management-status" class="settings-placeholder" role="status"></div>
+
+      <div class="management-layout">
+        <article class="card settings-section management-panel management-credentials-panel">
+          <div class="management-panel-heading">
+            <div>
+              <p class="management-eyebrow">Credentials</p>
+              <h3>Protected credentials</h3>
+              <p class="muted">Only labels and credential types are shown. Stored secret values are never displayed.</p>
+            </div>
+          </div>
+          <div id="management-credential-list" class="management-list management-credential-list"></div>
+          <details id="management-credential-editor" class="management-editor">
+            <summary>Create or rotate a credential</summary>
+            <form id="management-credential-form" class="settings-form management-credential-form" autocomplete="off">
+            <input type="hidden" name="credential_id">
+              <div class="management-form-grid">
+                <label>Label <input name="label" maxlength="120" required></label>
+                <label>Type
+                  <select name="credential_type" required>
+                    <option value="username_password">Username and password</option>
+                    <option value="ssh_private_key">SSH private key</option>
+                    <option value="snmp_v2_community">SNMPv2 community</option>
+                    <option value="snmp_v3">SNMPv3 auth/privacy</option>
+                    <option value="api_token">API token</option>
+                  </select>
+                </label>
+              </div>
+              <div id="management-secret-fields" class="management-form-grid"></div>
+              <div class="settings-actions management-form-actions">
+                <button type="submit">Save credential</button>
+                <button type="button" class="secondary" id="management-credential-cancel" hidden>Cancel rotation</button>
+              </div>
+            </form>
+          </details>
+        </article>
+
+        <article class="card settings-section management-panel management-add-panel">
+          <div class="management-panel-heading">
+            <div>
+              <p class="management-eyebrow">Add management source</p>
+              <h3 id="management-source-form-title">New source configuration</h3>
+              <p class="muted">This form creates a new source. Editing a persisted source is explicitly identified here.</p>
+            </div>
+            <span id="management-source-form-state" class="badge management-form-state">New</span>
+          </div>
+          <form id="management-source-form" class="settings-form management-source-form" autocomplete="off" aria-labelledby="management-source-form-title">
+            <input type="hidden" name="source_id">
+            <div class="management-form-grid">
+              <label>Participant <select name="participant" required></select></label>
+              <label>Adapter
+                <select name="adapter_type" required>
+                  <option value="ssh">SSH</option>
+                  <option value="snmp">SNMP</option>
+                </select>
+              </label>
+              <label>Management address <input name="management_address" maxlength="253" required></label>
+              <label>Port <input name="management_port" type="number" min="1" max="65535"></label>
+              <label>Credential <select name="credential_id"><option value="">None</option></select></label>
+              <label>Timeout (seconds) <input name="connection_timeout_seconds" type="number" min="1" max="30" value="5" required></label>
+            </div>
+            <label class="management-enabled-control"><input name="enabled" type="checkbox"> Enabled for explicit management actions</label>
+            <fieldset class="management-capabilities">
+              <legend>Optional capabilities</legend>
+              <p class="muted">Supported does not mean enabled. Select only capabilities intentionally approved for this source.</p>
+              <div class="management-capability-grid">
+                <label><input type="checkbox" name="capability" value="interface_inventory"> Interface inventory</label>
+                <label><input type="checkbox" name="capability" value="bridge_fdb"> Bridge FDB</label>
+                <label><input type="checkbox" name="capability" value="wireless_associations"> Wireless associations</label>
+                <label><input type="checkbox" name="capability" value="neighbours"> Neighbours</label>
+              </div>
+            </fieldset>
+            <div class="settings-actions management-form-actions">
+              <button type="submit">Save source</button>
+              <button type="button" class="secondary" id="management-source-cancel" hidden>Cancel edit</button>
+            </div>
+          </form>
+        </article>
+
+        <article class="card settings-section management-panel management-configured-panel">
+          <div class="management-panel-heading">
+            <div>
+              <p class="management-eyebrow">Configured sources</p>
+              <h3>Persisted management endpoints</h3>
+              <p class="muted">Operational source state below always comes from persisted source data.</p>
+            </div>
+          </div>
+          <div id="management-source-list" class="management-list management-source-list"></div>
+        </article>
       </div>
     </section>
 
@@ -1038,6 +1147,7 @@
   </main>
 
   <script src="{{ url_for('static', filename='js/theme.js') }}?v={{ app_version }}"></script>
+  <script src="{{ url_for('static', filename='js/management-settings.js') }}?v={{ app_version }}"></script>
 
 </body>
 </html>

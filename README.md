@@ -158,6 +158,114 @@ Validate the resolved configuration before starting BEACN:
 docker compose config
 ```
 
+### Management credential encryption key
+
+Management credentials require a Fernet root key. Generate it once on the host,
+store it outside Git with restrictive ownership and mode (normally root or the
+deployment operator, mode `0600`), and back it up separately from the SQLite
+database. Loss of this key makes encrypted management credentials unrecoverable.
+Never substitute Flask's session key and never store the key in SQLite.
+
+The optional Compose overlay mounts the file read-only:
+
+```bash
+sudo install -d -m 0700 /var/lib/beacn-secrets
+sudo python3 -c "from cryptography.fernet import Fernet; open('/var/lib/beacn-secrets/credential-keys', 'xb').write(Fernet.generate_key() + b'\n')"
+sudo chmod 0600 /var/lib/beacn-secrets/credential-keys
+BEACN_ENCRYPTION_KEY_HOST_FILE=/var/lib/beacn-secrets/credential-keys \
+  docker compose -f docker-compose.yml -f docker-compose.encryption.yml config
+```
+
+The exclusive-create mode makes the generation command fail rather than replace
+an existing key. Substitute the actual protected path consistently in the
+generation and Compose commands. The command writes the key directly to the
+file and does not print it.
+
+The file contains one Fernet key per line. The first is active for encryption;
+remaining lines may decrypt legacy records during controlled rotation. BEACN
+does not generate or rotate this file automatically. Without a valid readable
+file, normal startup continues while credential creation and connectivity that
+requires credentials remain locked.
+
+#### Encryption-root backup and recovery
+
+The production encryption root is stored at
+`/var/lib/beacn-secrets/credential-keys`. It is required to decrypt every
+management credential protected with that key. Losing it makes those
+credentials unrecoverable, and replacing or rotating it without a controlled
+key-ring transition makes existing ciphertext unreadable.
+
+Keep a recovery copy separately from the BEACN host in encrypted, offline, or
+otherwise secret-safe storage. An ordinary unencrypted cloud drive, application
+backup, repository checkout, home directory, ZIP archive, or removable
+filesystem is not an appropriate destination. SQLite backups and encryption-key
+backups should remain separate but must be recoverable as a corresponding pair.
+
+After attaching or unlocking an administrator-approved encrypted destination
+with Unix permission support, an administrator may deliberately create one
+recovery copy as follows. Supply the destination directory interactively; do
+not substitute an ordinary backup location. These commands do not print the
+key, refuse to replace an existing recovery file, and verify the copy with a
+silent byte comparison:
+
+```bash
+set -eu
+read -r -p "Mounted encrypted recovery directory: " BEACN_KEY_BACKUP_DIRECTORY
+test -n "$BEACN_KEY_BACKUP_DIRECTORY"
+test -d "$BEACN_KEY_BACKUP_DIRECTORY"
+test ! -e "$BEACN_KEY_BACKUP_DIRECTORY/beacn-credential-keys"
+sudo install -o root -g root -m 0600 -- \
+  /var/lib/beacn-secrets/credential-keys \
+  "$BEACN_KEY_BACKUP_DIRECTORY/beacn-credential-keys"
+sudo cmp --silent -- \
+  /var/lib/beacn-secrets/credential-keys \
+  "$BEACN_KEY_BACKUP_DIRECTORY/beacn-credential-keys"
+sudo stat -c 'owner=%U group=%G mode=%a bytes=%s' -- \
+  "$BEACN_KEY_BACKUP_DIRECTORY/beacn-credential-keys"
+unset BEACN_KEY_BACKUP_DIRECTORY
+```
+
+Where recovery inventories need to distinguish several saved roots, an
+administrator may privately record the output of
+`sudo sha256sum -- /var/lib/beacn-secrets/credential-keys`. This one-way,
+non-secret fingerprint identifies a candidate recovery key; it cannot recover
+or replace the key and should not be automatically published externally.
+
+On a replacement or rebuilt BEACN host, do not use management credentials until
+the matching database and exact saved encryption root are restored. Never
+generate a replacement root when encrypted credentials already exist. After
+placing the approved recovery medium in a trusted state, restore with:
+
+```bash
+set -eu
+read -r -p "Exact saved encryption-root file: " BEACN_KEY_RECOVERY_FILE
+test -n "$BEACN_KEY_RECOVERY_FILE"
+sudo test -f "$BEACN_KEY_RECOVERY_FILE"
+sudo test ! -e /var/lib/beacn-secrets/credential-keys
+sudo install -d -o root -g root -m 0700 /var/lib/beacn-secrets
+sudo install -o root -g root -m 0600 -- \
+  "$BEACN_KEY_RECOVERY_FILE" \
+  /var/lib/beacn-secrets/credential-keys
+sudo cmp --silent -- \
+  "$BEACN_KEY_RECOVERY_FILE" \
+  /var/lib/beacn-secrets/credential-keys
+sudo stat -c 'owner=%U group=%G mode=%a bytes=%s' -- \
+  /var/lib/beacn-secrets/credential-keys
+unset BEACN_KEY_RECOVERY_FILE
+BEACN_ENCRYPTION_KEY_HOST_FILE=/var/lib/beacn-secrets/credential-keys \
+  docker compose -f docker-compose.yml -f docker-compose.encryption.yml \
+  up -d --no-deps --force-recreate beacn-console
+docker exec beacn-console python -c \
+  "from beacn.security.credentials import credential_cipher_from_environment as load; print('cipher_available=' + str(load().available).lower())"
+docker exec beacn-console python -c \
+  "import sqlite3; connection=sqlite3.connect('/data/beacn.db'); print(connection.execute('PRAGMA integrity_check').fetchone()[0]); print('foreign_key_violations=' + str(len(connection.execute('PRAGMA foreign_key_check').fetchall()))); connection.close()"
+```
+
+Require `cipher_available=true`, `integrity_check` output `ok`, and zero foreign
+key violations. Then perform an operator-approved credential-decryption check
+that reports only pass/fail and never prints plaintext. Resume management
+connectivity only after that check succeeds.
+
 Review the resolved `NETWORK_SUBNET`, then start the Console:
 
 ```bash
@@ -283,4 +391,3 @@ MIT License
 ---
 
 Built with ❤️ for homelabs, labs and small infrastructure teams.
-
