@@ -3,4 +3,4 @@ gunicorn==26.0.0
 docker==7.2.0
 pysnmp==7.1.28
 cryptography>=50.0.0
-paramiko==4.0.0
+paramiko==5.0.0
